@@ -337,7 +337,8 @@ button:hover,
 }
 
 .action-buttons,
-.form-actions {
+.form-actions,
+.detail-toggle-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -369,10 +370,34 @@ button:hover,
   clip: rect(0 0 0 0);
 }
 
-.video-form {
+.video-form,
+.detail-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.detail-fields[hidden] {
+  display: none;
+}
+
+.detail-fields {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.detail-toggle-row {
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  color: var(--muted);
+}
+
+.secondary-button {
+  background: rgba(79, 209, 197, 0.1);
 }
 
 .video-form label,
@@ -441,12 +466,14 @@ button:hover,
 
   .filter-grid,
   .video-form,
+  .detail-fields,
   .video-list {
     grid-template-columns: 1fr;
   }
 
   .action-buttons,
   .form-actions,
+  .detail-toggle-row,
   .summary-bar {
     align-items: stretch;
     flex-direction: column;
@@ -454,6 +481,7 @@ button:hover,
 
   .action-buttons > *,
   .form-actions > *,
+  .detail-toggle-row > *,
   .summary-bar button {
     width: 100%;
     justify-content: center;

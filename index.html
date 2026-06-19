@@ -40,6 +40,10 @@
       </div>
       <form id="addVideoForm" class="video-form">
         <label>
+          動画URL
+          <input type="url" name="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." required>
+        </label>
+        <label>
           チャンネル名
           <input type="text" name="channelName" autocomplete="organization" required>
         </label>
@@ -47,53 +51,60 @@
           動画タイトル
           <input type="text" name="title" required>
         </label>
-        <label>
-          動画URL
-          <input type="url" name="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." required>
-        </label>
-        <label>
-          公開日
-          <input type="date" name="publishedDate" required>
-        </label>
         <label class="full-field">
-          要約
-          <textarea name="summary" rows="4" required></textarea>
+          気になった理由・メモ
+          <textarea name="note" rows="3" placeholder="あとで見返したい理由、気になった切り口など" required></textarea>
         </label>
-        <label class="full-field">
-          重要ポイント（1行に1つ）
-          <textarea name="keyPoints" rows="5" required></textarea>
-        </label>
-        <label class="full-field">
-          40代のリアル向け示唆
-          <textarea name="fortiesInsight" rows="4" required></textarea>
-        </label>
-        <label>
-          視聴判断
-          <select name="decision" required>
-            <option value="A">A 全部見る</option>
-            <option value="B">B 該当箇所だけ見る</option>
-            <option value="C">C 要約で十分</option>
-            <option value="D">D 保留</option>
-          </select>
-        </label>
-        <label>
-          深掘り候補
-          <select name="deepDive" required>
-            <option value="true">あり</option>
-            <option value="false">なし</option>
-          </select>
-        </label>
-        <label>
-          投稿化候補
-          <select name="postCandidate" required>
-            <option value="X">X</option>
-            <option value="note">note</option>
-            <option value="YouTube">YouTube</option>
-            <option value="なし">なし</option>
-          </select>
-        </label>
+        <div class="full-field detail-toggle-row">
+          <button type="button" id="toggleDetails" class="secondary-button" aria-expanded="false" aria-controls="detailFields">詳細を入力する</button>
+          <span>要約や視聴判断は、あとから整理できます。</span>
+        </div>
+        <div id="detailFields" class="detail-fields full-field" hidden>
+          <label>
+            公開日
+            <input type="date" name="publishedDate">
+          </label>
+          <label class="full-field">
+            要約
+            <textarea name="summary" rows="4" placeholder="未入力なら「未整理」で保存されます"></textarea>
+          </label>
+          <label class="full-field">
+            重要ポイント（1行に1つ）
+            <textarea name="keyPoints" rows="5" placeholder="未入力なら「未整理」で保存されます"></textarea>
+          </label>
+          <label class="full-field">
+            40代のリアル向け示唆
+            <textarea name="fortiesInsight" rows="4" placeholder="未入力なら「未整理」で保存されます"></textarea>
+          </label>
+          <label>
+            視聴判断
+            <select name="decision">
+              <option value="D" selected>D 保留</option>
+              <option value="A">A 全部見る</option>
+              <option value="B">B 該当箇所だけ見る</option>
+              <option value="C">C 要約で十分</option>
+            </select>
+          </label>
+          <label>
+            深掘り候補
+            <select name="deepDive">
+              <option value="undecided" selected>未判定</option>
+              <option value="true">あり</option>
+              <option value="false">なし</option>
+            </select>
+          </label>
+          <label>
+            投稿化候補
+            <select name="postCandidate">
+              <option value="なし" selected>なし</option>
+              <option value="X">X</option>
+              <option value="note">note</option>
+              <option value="YouTube">YouTube</option>
+            </select>
+          </label>
+        </div>
         <div class="form-actions full-field">
-          <button type="submit" class="primary-button">localStorageに保存</button>
+          <button type="submit" class="primary-button">あとで整理する</button>
           <button type="reset">入力をクリア</button>
         </div>
         <p id="formStatus" class="status-message full-field" aria-live="polite"></p>
@@ -146,7 +157,15 @@
       <button type="button" class="delete-video" hidden>削除</button>
       <h3 class="title"></h3>
       <a class="url" target="_blank" rel="noopener noreferrer"></a>
+      <div class="content-block note-block">
+        <h4>気になった理由・メモ</h4>
+        <p class="note"></p>
+      </div>
       <dl class="meta-grid">
+        <div>
+          <dt>状態</dt>
+          <dd class="organize-status badge"></dd>
+        </div>
         <div>
           <dt>視聴判断</dt>
           <dd class="decision badge"></dd>
