@@ -23,19 +23,77 @@ const elements = {
   template: document.querySelector('#videoCardTemplate'),
 };
 
+const requiredVideoFields = [
+  'channelName',
+  'title',
+  'url',
+  'publishedDate',
+  'summary',
+  'keyPoints',
+  'fortiesInsight',
+  'decision',
+  'deepDive',
+  'postCandidate',
+];
+
 async function loadVideos() {
   try {
-    const response = await fetch('videos.json');
+    const response = await fetch('./videos.json', { cache: 'no-cache' });
 
     if (!response.ok) {
       throw new Error(`videos.jsonを読み込めませんでした: ${response.status}`);
     }
 
-    state.videos = await response.json();
+    const videos = await response.json();
+    validateVideos(videos);
+    state.videos = videos;
     renderVideos();
   } catch (error) {
-    elements.videoList.innerHTML = `<p class="empty-state">${error.message}</p>`;
-    elements.resultCount.textContent = '0件';
+    showLoadError(error);
+  }
+}
+
+function validateVideos(videos) {
+  if (!Array.isArray(videos)) {
+    throw new Error('videos.jsonの形式が不正です: 配列である必要があります。');
+  }
+
+  videos.forEach((video, index) => {
+    const missingField = requiredVideoFields.find((field) => !(field in video));
+
+    if (missingField) {
+      throw new Error(`videos.jsonの形式が不正です: ${index + 1}件目に${missingField}がありません。`);
+    }
+
+    if (!Array.isArray(video.keyPoints)) {
+      throw new Error(`videos.jsonの形式が不正です: ${index + 1}件目のkeyPointsは配列である必要があります。`);
+    }
+  });
+}
+
+function showLoadError(error) {
+  const message = error instanceof Error ? error.message : 'videos.jsonの読み込みに失敗しました。';
+  const errorMessage = document.createElement('p');
+
+  errorMessage.className = 'empty-state error-state';
+  errorMessage.textContent = message;
+
+  if (typeof elements.videoList.replaceChildren === 'function') {
+    elements.videoList.replaceChildren(errorMessage);
+  } else {
+    elements.videoList.innerHTML = '';
+    elements.videoList.append(errorMessage);
+  }
+
+  elements.emptyState.hidden = true;
+  elements.resultCount.textContent = '0件';
+}
+
+function resetListState() {
+  if (typeof elements.videoList.replaceChildren === 'function') {
+    elements.videoList.replaceChildren();
+  } else {
+    elements.videoList.innerHTML = '';
   }
 }
 
@@ -51,7 +109,7 @@ function getFilteredVideos() {
 
 function renderVideos() {
   const videos = getFilteredVideos();
-  elements.videoList.innerHTML = '';
+  resetListState();
   elements.resultCount.textContent = `${videos.length}件`;
   elements.emptyState.hidden = videos.length > 0;
 

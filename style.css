@@ -274,6 +274,12 @@ button:hover,
   text-align: center;
 }
 
+.error-state {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: rgba(127, 29, 29, 0.24);
+  color: #fecaca;
+}
+
 @media (max-width: 900px) {
   .controls,
   .filter-grid,
