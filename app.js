@@ -5,11 +5,15 @@ const decisionLabels = {
   D: 'D 保留',
 };
 
+const storageKey = 'yt-board:v2:local-videos';
+
 const state = {
-  videos: [],
+  sampleVideos: [],
+  localVideos: [],
   decision: 'all',
   deepDiveOnly: false,
   postCandidateOnly: false,
+  formVisible: false,
 };
 
 const elements = {
@@ -21,6 +25,13 @@ const elements = {
   videoList: document.querySelector('#videoList'),
   emptyState: document.querySelector('#emptyState'),
   template: document.querySelector('#videoCardTemplate'),
+  toggleForm: document.querySelector('#toggleForm'),
+  addVideoPanel: document.querySelector('#addVideoPanel'),
+  addVideoForm: document.querySelector('#addVideoForm'),
+  formStatus: document.querySelector('#formStatus'),
+  exportButton: document.querySelector('#exportButton'),
+  importInput: document.querySelector('#importInput'),
+  importStatus: document.querySelector('#importStatus'),
 };
 
 const requiredVideoFields = [
@@ -36,6 +47,8 @@ const requiredVideoFields = [
   'postCandidate',
 ];
 
+const localOnlyFields = ['id', 'source'];
+
 async function loadVideos() {
   try {
     const response = await fetch('./videos.json', { cache: 'no-cache' });
@@ -46,29 +59,91 @@ async function loadVideos() {
 
     const videos = await response.json();
     validateVideos(videos);
-    state.videos = videos;
+    state.sampleVideos = videos.map((video) => ({ ...video, source: 'sample' }));
+    state.localVideos = loadLocalVideos();
     renderVideos();
   } catch (error) {
     showLoadError(error);
   }
 }
 
-function validateVideos(videos) {
+function validateVideos(videos, options = {}) {
+  const { allowLocalFields = false } = options;
+
   if (!Array.isArray(videos)) {
-    throw new Error('videos.jsonの形式が不正です: 配列である必要があります。');
+    throw new Error('動画データの形式が不正です: 配列である必要があります。');
   }
 
   videos.forEach((video, index) => {
     const missingField = requiredVideoFields.find((field) => !(field in video));
 
     if (missingField) {
-      throw new Error(`videos.jsonの形式が不正です: ${index + 1}件目に${missingField}がありません。`);
+      throw new Error(`動画データの形式が不正です: ${index + 1}件目に${missingField}がありません。`);
     }
 
     if (!Array.isArray(video.keyPoints)) {
-      throw new Error(`videos.jsonの形式が不正です: ${index + 1}件目のkeyPointsは配列である必要があります。`);
+      throw new Error(`動画データの形式が不正です: ${index + 1}件目のkeyPointsは配列である必要があります。`);
+    }
+
+    if (!['A', 'B', 'C', 'D'].includes(video.decision)) {
+      throw new Error(`動画データの形式が不正です: ${index + 1}件目のdecisionが不正です。`);
+    }
+
+    if (typeof video.deepDive !== 'boolean') {
+      throw new Error(`動画データの形式が不正です: ${index + 1}件目のdeepDiveはtrue/falseである必要があります。`);
+    }
+
+    if (!['X', 'note', 'YouTube', 'なし'].includes(video.postCandidate)) {
+      throw new Error(`動画データの形式が不正です: ${index + 1}件目のpostCandidateが不正です。`);
+    }
+
+    if (!allowLocalFields) {
+      const unsupportedLocalField = localOnlyFields.find((field) => field in video);
+
+      if (unsupportedLocalField) {
+        throw new Error(`videos.jsonの形式が不正です: ${index + 1}件目に${unsupportedLocalField}は不要です。`);
+      }
     }
   });
+}
+
+function loadLocalVideos() {
+  const saved = localStorage.getItem(storageKey);
+
+  if (!saved) {
+    return [];
+  }
+
+  try {
+    const videos = JSON.parse(saved);
+    validateVideos(videos, { allowLocalFields: true });
+    return videos.map((video) => normalizeLocalVideo(video));
+  } catch (error) {
+    console.error(error);
+    setStatus(elements.importStatus, '保存済みデータの形式が不正だったため、localStorageの追加データは読み込みませんでした。', 'error');
+    return [];
+  }
+}
+
+function saveLocalVideos() {
+  localStorage.setItem(storageKey, JSON.stringify(state.localVideos, null, 2));
+}
+
+function normalizeLocalVideo(video) {
+  return {
+    ...video,
+    id: video.id || createLocalId(),
+    source: 'local',
+    keyPoints: Array.isArray(video.keyPoints) ? video.keyPoints : [],
+  };
+}
+
+function createLocalId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function showLoadError(error) {
@@ -97,8 +172,12 @@ function resetListState() {
   }
 }
 
+function getAllVideos() {
+  return [...state.sampleVideos, ...state.localVideos];
+}
+
 function getFilteredVideos() {
-  return state.videos.filter((video) => {
+  return getAllVideos().filter((video) => {
     const matchesDecision = state.decision === 'all' || video.decision === state.decision;
     const matchesDeepDive = !state.deepDiveOnly || video.deepDive === true;
     const matchesPostCandidate = !state.postCandidateOnly || video.postCandidate !== 'なし';
@@ -110,7 +189,7 @@ function getFilteredVideos() {
 function renderVideos() {
   const videos = getFilteredVideos();
   resetListState();
-  elements.resultCount.textContent = `${videos.length}件`;
+  elements.resultCount.textContent = `${videos.length}件（サンプル${state.sampleVideos.length}件 / 追加${state.localVideos.length}件）`;
   elements.emptyState.hidden = videos.length > 0;
 
   videos.forEach((video) => {
@@ -119,6 +198,14 @@ function renderVideos() {
     card.querySelector('.channel').textContent = video.channelName;
     card.querySelector('.published-date').textContent = video.publishedDate;
     card.querySelector('.title').textContent = video.title;
+
+    const sourceBadge = card.querySelector('.source-badge');
+    sourceBadge.textContent = video.source === 'local' ? '追加データ' : 'サンプル';
+    sourceBadge.classList.toggle('is-local', video.source === 'local');
+
+    const deleteButton = card.querySelector('.delete-video');
+    deleteButton.hidden = video.source !== 'local';
+    deleteButton.addEventListener('click', () => deleteLocalVideo(video.id));
 
     const link = card.querySelector('.url');
     link.href = video.url;
@@ -151,6 +238,107 @@ function renderVideos() {
   });
 }
 
+function getFormVideo() {
+  const formData = new FormData(elements.addVideoForm);
+  const keyPoints = formData
+    .get('keyPoints')
+    .split('\n')
+    .map((point) => point.trim())
+    .filter(Boolean);
+
+  return normalizeLocalVideo({
+    channelName: formData.get('channelName').trim(),
+    title: formData.get('title').trim(),
+    url: formData.get('url').trim(),
+    publishedDate: formData.get('publishedDate'),
+    summary: formData.get('summary').trim(),
+    keyPoints,
+    fortiesInsight: formData.get('fortiesInsight').trim(),
+    decision: formData.get('decision'),
+    deepDive: formData.get('deepDive') === 'true',
+    postCandidate: formData.get('postCandidate'),
+  });
+}
+
+function addLocalVideo(event) {
+  event.preventDefault();
+  const video = getFormVideo();
+
+  try {
+    validateVideos([video], { allowLocalFields: true });
+    state.localVideos.unshift(video);
+    saveLocalVideos();
+    elements.addVideoForm.reset();
+    setStatus(elements.formStatus, '動画を追加しました。ブラウザのlocalStorageに保存されています。', 'success');
+    renderVideos();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '入力内容を確認してください。';
+    setStatus(elements.formStatus, message, 'error');
+  }
+}
+
+function deleteLocalVideo(id) {
+  const target = state.localVideos.find((video) => video.id === id);
+
+  if (!target || !window.confirm(`「${target.title}」を削除しますか？`)) {
+    return;
+  }
+
+  state.localVideos = state.localVideos.filter((video) => video.id !== id);
+  saveLocalVideos();
+  setStatus(elements.importStatus, '追加データを削除しました。', 'success');
+  renderVideos();
+}
+
+function exportLocalVideos() {
+  const data = JSON.stringify(state.localVideos, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+
+  link.href = url;
+  link.download = `yt-board-local-videos-${date}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  setStatus(elements.importStatus, '追加データをJSON形式でエクスポートしました。', 'success');
+}
+
+function importLocalVideos(event) {
+  const file = event.target.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.addEventListener('load', () => {
+    try {
+      const videos = JSON.parse(reader.result);
+      validateVideos(videos, { allowLocalFields: true });
+      state.localVideos = videos.map((video) => normalizeLocalVideo(video));
+      saveLocalVideos();
+      setStatus(elements.importStatus, `${state.localVideos.length}件の追加データをインポートしました。`, 'success');
+      renderVideos();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'JSONのインポートに失敗しました。';
+      setStatus(elements.importStatus, message, 'error');
+    } finally {
+      elements.importInput.value = '';
+    }
+  });
+
+  reader.readAsText(file);
+}
+
+function setStatus(element, message, type) {
+  element.textContent = message;
+  element.className = `status-message ${type}`;
+}
+
 function bindEvents() {
   elements.decisionFilter.addEventListener('change', (event) => {
     state.decision = event.target.value;
@@ -176,6 +364,16 @@ function bindEvents() {
     elements.postCandidateFilter.checked = false;
     renderVideos();
   });
+
+  elements.toggleForm.addEventListener('click', () => {
+    state.formVisible = !state.formVisible;
+    elements.addVideoPanel.hidden = !state.formVisible;
+    elements.toggleForm.textContent = state.formVisible ? '入力フォームを閉じる' : '動画を追加';
+  });
+
+  elements.addVideoForm.addEventListener('submit', addLocalVideo);
+  elements.exportButton.addEventListener('click', exportLocalVideos);
+  elements.importInput.addEventListener('change', importLocalVideos);
 }
 
 bindEvents();

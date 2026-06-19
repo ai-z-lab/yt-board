@@ -16,6 +16,90 @@
   </header>
 
   <main class="container">
+    <section class="action-panel" aria-labelledby="action-heading">
+      <div>
+        <p class="section-label">Local v2</p>
+        <h2 id="action-heading">ブラウザに動画を追加</h2>
+        <p>GitHub Pages上ではファイル保存できないため、追加データはこのブラウザのlocalStorageに保存します。</p>
+      </div>
+      <div class="action-buttons">
+        <button type="button" id="toggleForm" class="primary-button">動画を追加</button>
+        <button type="button" id="exportButton">追加データをエクスポート</button>
+        <label class="import-button">
+          JSONをインポート
+          <input type="file" id="importInput" accept="application/json,.json">
+        </label>
+      </div>
+      <p id="importStatus" class="status-message" aria-live="polite"></p>
+    </section>
+
+    <section id="addVideoPanel" class="add-video-panel" aria-labelledby="add-video-heading" hidden>
+      <div>
+        <p class="section-label">Add Video</p>
+        <h2 id="add-video-heading">動画情報を入力</h2>
+      </div>
+      <form id="addVideoForm" class="video-form">
+        <label>
+          チャンネル名
+          <input type="text" name="channelName" autocomplete="organization" required>
+        </label>
+        <label>
+          動画タイトル
+          <input type="text" name="title" required>
+        </label>
+        <label>
+          動画URL
+          <input type="url" name="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." required>
+        </label>
+        <label>
+          公開日
+          <input type="date" name="publishedDate" required>
+        </label>
+        <label class="full-field">
+          要約
+          <textarea name="summary" rows="4" required></textarea>
+        </label>
+        <label class="full-field">
+          重要ポイント（1行に1つ）
+          <textarea name="keyPoints" rows="5" required></textarea>
+        </label>
+        <label class="full-field">
+          40代のリアル向け示唆
+          <textarea name="fortiesInsight" rows="4" required></textarea>
+        </label>
+        <label>
+          視聴判断
+          <select name="decision" required>
+            <option value="A">A 全部見る</option>
+            <option value="B">B 該当箇所だけ見る</option>
+            <option value="C">C 要約で十分</option>
+            <option value="D">D 保留</option>
+          </select>
+        </label>
+        <label>
+          深掘り候補
+          <select name="deepDive" required>
+            <option value="true">あり</option>
+            <option value="false">なし</option>
+          </select>
+        </label>
+        <label>
+          投稿化候補
+          <select name="postCandidate" required>
+            <option value="X">X</option>
+            <option value="note">note</option>
+            <option value="YouTube">YouTube</option>
+            <option value="なし">なし</option>
+          </select>
+        </label>
+        <div class="form-actions full-field">
+          <button type="submit" class="primary-button">localStorageに保存</button>
+          <button type="reset">入力をクリア</button>
+        </div>
+        <p id="formStatus" class="status-message full-field" aria-live="polite"></p>
+      </form>
+    </section>
+
     <section class="controls" aria-labelledby="filter-heading">
       <div>
         <p class="section-label">Filter</p>
@@ -57,7 +141,9 @@
       <div class="card-topline">
         <span class="channel"></span>
         <span class="published-date"></span>
+        <span class="source-badge badge"></span>
       </div>
+      <button type="button" class="delete-video" hidden>削除</button>
       <h3 class="title"></h3>
       <a class="url" target="_blank" rel="noopener noreferrer"></a>
       <dl class="meta-grid">
