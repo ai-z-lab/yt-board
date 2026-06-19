@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>動画仕分けボード</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <p class="eyebrow">YouTube Sorting Board</p>
+      <h1>動画仕分けボード</h1>
+      <p class="lead">気になるYouTube動画を、見る前に「要約」「視聴判断」「40代のリアル向け発信価値」で整理する軽量Webアプリです。</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="controls" aria-labelledby="filter-heading">
+      <div>
+        <p class="section-label">Filter</p>
+        <h2 id="filter-heading">仕分け条件</h2>
+      </div>
+      <div class="filter-grid">
+        <label>
+          視聴判断
+          <select id="decisionFilter">
+            <option value="all">すべて</option>
+            <option value="A">A 全部見る</option>
+            <option value="B">B 該当箇所だけ見る</option>
+            <option value="C">C 要約で十分</option>
+            <option value="D">D 保留</option>
+          </select>
+        </label>
+        <label class="check-label">
+          <input type="checkbox" id="deepDiveFilter">
+          深掘り候補あり
+        </label>
+        <label class="check-label">
+          <input type="checkbox" id="postCandidateFilter">
+          投稿化候補あり
+        </label>
+      </div>
+    </section>
+
+    <section class="summary-bar" aria-live="polite">
+      <span id="resultCount">0件</span>
+      <button type="button" id="resetFilters">フィルターをリセット</button>
+    </section>
+
+    <section id="videoList" class="video-list" aria-label="動画一覧"></section>
+    <p id="emptyState" class="empty-state" hidden>条件に一致する動画がありません。</p>
+  </main>
+
+  <template id="videoCardTemplate">
+    <article class="video-card">
+      <div class="card-topline">
+        <span class="channel"></span>
+        <span class="published-date"></span>
+      </div>
+      <h3 class="title"></h3>
+      <a class="url" target="_blank" rel="noopener noreferrer"></a>
+      <dl class="meta-grid">
+        <div>
+          <dt>視聴判断</dt>
+          <dd class="decision badge"></dd>
+        </div>
+        <div>
+          <dt>深掘り候補</dt>
+          <dd class="deep-dive badge"></dd>
+        </div>
+        <div>
+          <dt>投稿化候補</dt>
+          <dd class="post-candidate badge"></dd>
+        </div>
+      </dl>
+      <div class="content-block">
+        <h4>要約</h4>
+        <p class="summary"></p>
+      </div>
+      <div class="content-block">
+        <h4>重要ポイント</h4>
+        <ul class="points"></ul>
+      </div>
+      <div class="content-block insight-block">
+        <h4>40代のリアル向け示唆</h4>
+        <p class="insight"></p>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

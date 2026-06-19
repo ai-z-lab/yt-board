@@ -1,0 +1,50 @@
+[
+  {
+    "channelName": "40代からの暮らし研究所",
+    "title": "忙しい40代が時間を取り戻す3つの習慣",
+    "url": "https://www.youtube.com/watch?v=sample001",
+    "publishedDate": "2026-05-12",
+    "summary": "仕事・家庭・自分時間の優先順位を見直し、朝の固定ルーティンと予定の余白づくりで消耗を減らす方法を紹介している。",
+    "keyPoints": [
+      "朝に重要タスクを1つだけ置く",
+      "予定表に休む時間を先に確保する",
+      "家事や雑務は完璧より継続性を重視する"
+    ],
+    "fortiesInsight": "体力と責任のバランスが変わる40代には、努力量を増やすより生活設計を軽くする発信につなげやすい。",
+    "decision": "A",
+    "deepDive": true,
+    "postCandidate": "note"
+  },
+  {
+    "channelName": "キャリア再設計チャンネル",
+    "title": "会社員の副業、最初に決めるべきこと",
+    "url": "https://www.youtube.com/watch?v=sample002",
+    "publishedDate": "2026-04-28",
+    "summary": "副業を始める前に、目的・使える時間・避けたいリスクを明確にする重要性を解説している。",
+    "keyPoints": [
+      "収入目的か経験目的かを分ける",
+      "週に使える時間を現実的に見積もる",
+      "勤務先ルールと税務の確認を後回しにしない"
+    ],
+    "fortiesInsight": "焦りで副業を始めがちな40代に対して、生活防衛と小さな検証を軸にした投稿へ展開できる。",
+    "decision": "B",
+    "deepDive": true,
+    "postCandidate": "X"
+  },
+  {
+    "channelName": "学び直しラボ",
+    "title": "AI時代の情報収集術 入門",
+    "url": "https://www.youtube.com/watch?v=sample003",
+    "publishedDate": "2026-03-19",
+    "summary": "検索、ニュースレター、AI要約を組み合わせて、情報過多を避けながら学習テーマを絞る方法を説明している。",
+    "keyPoints": [
+      "収集前に知りたい問いを決める",
+      "保存する情報は後で使う前提で分類する",
+      "AI要約は一次情報確認とセットで使う"
+    ],
+    "fortiesInsight": "学び直しを始めたいが時間が少ない層に、情報を増やすより選ぶ基準を持つ重要性を伝えられる。",
+    "decision": "C",
+    "deepDive": false,
+    "postCandidate": "なし"
+  }
+]
