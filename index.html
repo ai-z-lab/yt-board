@@ -189,22 +189,35 @@
       </a>
       <h3 class="title"></h3>
       <a class="url" target="_blank" rel="noopener noreferrer"></a>
-      <button type="button" class="copy-prompt secondary-button">AI整理プロンプトをコピー</button>
-      <button type="button" class="edit-video secondary-button" hidden>編集</button>
-      <form class="video-form edit-video-form" hidden>
-        <label class="full-field">
-          文字起こし・本文
-          <textarea name="transcript" rows="8"></textarea>
-        </label>
-        <label class="full-field">
-          取得方法メモ
-          <input type="text" name="transcriptSourceNote">
-        </label>
-        <div class="form-actions full-field">
-          <button type="submit" class="primary-button">更新する</button>
-          <button type="button" class="cancel-edit">キャンセル</button>
-        </div>
-      </form>
+      <p class="transcript-notice" hidden>本文なしのため、動画の中身を見た前提では要約できません。タイトル情報のみの仮判定として扱ってください。</p>
+      <div class="card-actions">
+        <button type="button" class="add-transcript secondary-button">文字起こしを追加</button>
+        <button type="button" class="copy-prompt secondary-button">AI整理プロンプトをコピー</button>
+      </div>
+      <section class="transcript-panel" hidden aria-label="文字起こし取得サポート">
+        <h4>文字起こし取得サポート</h4>
+        <ol class="transcript-steps">
+          <li>YouTubeで動画を開く</li>
+          <li>メニューから「文字起こしを表示」を探す</li>
+          <li>文字起こしをコピーする</li>
+          <li>この欄に貼り付ける</li>
+          <li>更新する</li>
+          <li>AI整理プロンプトをコピーする</li>
+        </ol>
+        <form class="video-form edit-video-form">
+          <label class="full-field">
+            文字起こし・本文
+            <textarea name="transcript" rows="8" placeholder="YouTubeの文字起こし、字幕、本文メモなどを貼り付け"></textarea>
+          </label>
+          <label class="full-field">
+            取得方法メモ
+            <input type="text" name="transcriptSourceNote" placeholder="例：YouTube文字起こしをコピー、概要欄を転記">
+          </label>
+          <div class="form-actions full-field">
+            <button type="submit" class="primary-button transcript-save">更新する</button>
+          </div>
+        </form>
+      </section>
       <div class="content-block note-block">
         <h4>気になった理由・メモ</h4>
         <p class="note"></p>
