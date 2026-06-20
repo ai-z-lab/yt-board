@@ -2,6 +2,11 @@ name: Fetch YouTube transcripts
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'Optional YouTube URL or videoId. Empty = process data/videos.json entries.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -24,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Fetch transcripts
-        run: npm run fetch-transcripts
+        run: npm run fetch-transcript -- "${{ github.event.inputs.target }}"
 
       - name: Commit updated videos
         uses: stefanzweifel/git-auto-commit-action@v5
