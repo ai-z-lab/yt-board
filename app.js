@@ -31,7 +31,7 @@ const organizeTemplates = {
 
 const defaultTemplate = 'general';
 
-const decisionLabels = {
+const watchDecisionLabels = {
   A: 'A 全部見る',
   B: 'B 該当箇所だけ見る',
   C: 'C 要約で十分',
@@ -43,16 +43,16 @@ const storageKey = 'yt-board:v2:local-videos';
 const state = {
   sampleVideos: [],
   localVideos: [],
-  decision: 'all',
+  watchDecision: 'all',
   deepDiveOnly: false,
-  postCandidateOnly: false,
+  contentUseOnly: false,
   formVisible: false,
 };
 
 const elements = {
-  decisionFilter: document.querySelector('#decisionFilter'),
+  watchDecisionFilter: document.querySelector('#decisionFilter'),
   deepDiveFilter: document.querySelector('#deepDiveFilter'),
-  postCandidateFilter: document.querySelector('#postCandidateFilter'),
+  contentUseFilter: document.querySelector('#postCandidateFilter'),
   resetFilters: document.querySelector('#resetFilters'),
   resultCount: document.querySelector('#resultCount'),
   videoList: document.querySelector('#videoList'),
@@ -73,19 +73,13 @@ const elements = {
 };
 
 const requiredVideoFields = [
-  'channelName',
+  'id',
+  'channel',
   'title',
   'url',
-  'publishedDate',
-  'summary',
-  'keyPoints',
-  'fortiesInsight',
-  'decision',
-  'deepDive',
-  'postCandidate',
 ];
 
-const localOnlyFields = ['id', 'source'];
+const localOnlyFields = ['source'];
 
 async function loadVideos() {
   try {
@@ -95,9 +89,9 @@ async function loadVideos() {
       throw new Error(`videos.jsonを読み込めませんでした: ${response.status}`);
     }
 
-    const videos = await response.json();
+    const videos = (await response.json()).map((video) => normalizeVideo(video));
     validateVideos(videos);
-    state.sampleVideos = videos.map((video) => normalizeVideo({ ...video, source: 'sample' }));
+    state.sampleVideos = videos.map((video) => ({ ...video, source: 'sample' }));
     state.localVideos = loadLocalVideos();
     renderVideos();
   } catch (error) {
@@ -106,7 +100,7 @@ async function loadVideos() {
 }
 
 function hasRequiredVideoValue(video, field) {
-  return field in video && video[field] !== undefined && video[field] !== null;
+  return field in video && video[field] !== undefined && video[field] !== null && String(video[field]).trim() !== '';
 }
 
 function validateVideos(videos, options = {}) {
@@ -121,22 +115,6 @@ function validateVideos(videos, options = {}) {
 
     if (missingField) {
       throw new Error(`動画データの形式が不正です: ${index + 1}件目に${missingField}がありません。`);
-    }
-
-    if (!Array.isArray(video.keyPoints)) {
-      throw new Error(`動画データの形式が不正です: ${index + 1}件目のkeyPointsは配列である必要があります。`);
-    }
-
-    if (!['A', 'B', 'C', 'D'].includes(video.decision)) {
-      throw new Error(`動画データの形式が不正です: ${index + 1}件目のdecisionが不正です。`);
-    }
-
-    if (typeof video.deepDive !== 'boolean' && video.deepDive !== null) {
-      throw new Error(`動画データの形式が不正です: ${index + 1}件目のdeepDiveはtrue/false/nullである必要があります。`);
-    }
-
-    if (!['X', 'note', 'YouTube', 'なし'].includes(video.postCandidate)) {
-      throw new Error(`動画データの形式が不正です: ${index + 1}件目のpostCandidateが不正です。`);
     }
 
     if (!allowLocalFields) {
@@ -157,9 +135,9 @@ function loadLocalVideos() {
   }
 
   try {
-    const videos = JSON.parse(saved);
+    const videos = JSON.parse(saved).map((video) => normalizeLocalVideo(video));
     validateVideos(videos, { allowLocalFields: true });
-    return videos.map((video) => normalizeLocalVideo(video));
+    return videos;
   } catch (error) {
     console.error(error);
     setStatus(elements.importStatus, '保存済みデータの形式が不正だったため、localStorageの追加データは読み込みませんでした。', 'error');
@@ -180,29 +158,45 @@ function getTemplateLabel(template) {
 }
 
 function normalizeVideo(video) {
-  return {
-    ...video,
-    organizeTemplate: normalizeTemplate(video.organizeTemplate),
-  };
-}
-
-function normalizeLocalVideo(video) {
-  return {
-    ...video,
+  const points = video.points ?? video.keyPoints;
+  const normalized = {
     id: video.id || createLocalId(),
-    source: 'local',
-    note: typeof video.note === 'string' ? video.note : '',
+    channel: video.channel ?? video.channelName ?? '',
+    title: video.title ?? '',
+    url: video.url ?? '',
     publishedDate: video.publishedDate || '',
     summary: video.summary || '未整理',
-    keyPoints: Array.isArray(video.keyPoints) && video.keyPoints.length > 0 ? video.keyPoints : ['未整理'],
-    fortiesInsight: video.fortiesInsight || '未整理',
-    decision: video.decision || 'D',
-    deepDive: typeof video.deepDive === 'boolean' ? video.deepDive : null,
-    postCandidate: video.postCandidate || 'なし',
+    points: Array.isArray(points) && points.length > 0 ? points : ['未整理'],
+    insight: video.insight ?? video.fortiesInsight ?? '未整理',
+    watchDecision: ['A', 'B', 'C', 'D'].includes(video.watchDecision ?? video.decision) ? (video.watchDecision ?? video.decision) : 'D',
+    deepDive: normalizeDeepDive(video.deepDive),
+    contentUse: ['X', 'note', 'YouTube', 'なし'].includes(video.contentUse ?? video.postCandidate) ? (video.contentUse ?? video.postCandidate) : 'なし',
+    note: typeof video.note === 'string' ? video.note : '',
+    source: video.source,
     organizeTemplate: normalizeTemplate(video.organizeTemplate),
     videoId: video.videoId || extractYouTubeVideoId(video.url) || '',
     thumbnailUrl: video.thumbnailUrl || getYouTubeThumbnailUrl(video.videoId || extractYouTubeVideoId(video.url)) || '',
   };
+
+  if (normalized.source === undefined) {
+    delete normalized.source;
+  }
+
+  return normalized;
+}
+
+function normalizeLocalVideo(video) {
+  return {
+    ...normalizeVideo(video),
+    id: video.id || createLocalId(),
+    source: 'local',
+  };
+}
+
+function normalizeDeepDive(value) {
+  if (value === true || value === 'あり') return 'あり';
+  if (value === false || value === 'なし') return 'なし';
+  return '未判定';
 }
 
 function extractYouTubeVideoId(rawUrl) {
@@ -247,7 +241,7 @@ function getFormControls() {
   return {
     url: elements.addVideoForm.elements.url,
     title: elements.addVideoForm.elements.title,
-    channelName: elements.addVideoForm.elements.channelName,
+    channel: elements.addVideoForm.elements.channel,
   };
 }
 
@@ -257,18 +251,18 @@ function updateThumbnailPreview(thumbnailUrl) {
   image.src = thumbnailUrl || '';
 }
 
-function getManualInputMessage(title, channelName) {
-  return !title.value.trim() || !channelName.value.trim() ? 'タイトルとチャンネル名は手入力してください' : '';
+function getManualInputMessage(title, channel) {
+  return !title.value.trim() || !channel.value.trim() ? 'タイトルとチャンネル名は手入力してください' : '';
 }
 
-function setVideoIdSuccessStatus(title, channelName, suffix = '') {
-  const manualInputMessage = getManualInputMessage(title, channelName);
+function setVideoIdSuccessStatus(title, channel, suffix = '') {
+  const manualInputMessage = getManualInputMessage(title, channel);
   const messages = ['動画IDを取得しました', suffix, manualInputMessage].filter(Boolean);
   setStatus(elements.autoFillStatus, messages.join('。'), 'success');
 }
 
 async function fetchVideoInfo() {
-  const { url: urlInput, title, channelName } = getFormControls();
+  const { url: urlInput, title, channel } = getFormControls();
   const rawUrl = urlInput.value.trim();
   const videoId = extractYouTubeVideoId(rawUrl);
 
@@ -285,7 +279,7 @@ async function fetchVideoInfo() {
   }
 
   updateThumbnailPreview(getYouTubeThumbnailUrl(videoId));
-  setVideoIdSuccessStatus(title, channelName);
+  setVideoIdSuccessStatus(title, channel);
 
   try {
     const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`;
@@ -301,14 +295,14 @@ async function fetchVideoInfo() {
       title.value = data.title;
     }
 
-    if (data.author_name && !channelName.value.trim()) {
-      channelName.value = data.author_name;
+    if (data.author_name && !channel.value.trim()) {
+      channel.value = data.author_name;
     }
 
-    setVideoIdSuccessStatus(title, channelName, '取得できた動画情報を反映しました');
+    setVideoIdSuccessStatus(title, channel, '取得できた動画情報を反映しました');
   } catch (error) {
     console.warn(error);
-    setVideoIdSuccessStatus(title, channelName, 'タイトル・チャンネル名の自動取得はできませんでした');
+    setVideoIdSuccessStatus(title, channel, 'タイトル・チャンネル名の自動取得はできませんでした');
   }
 }
 
@@ -353,9 +347,9 @@ function getAllVideos() {
 
 function getFilteredVideos() {
   return getAllVideos().filter((video) => {
-    const matchesDecision = state.decision === 'all' || video.decision === state.decision;
-    const matchesDeepDive = !state.deepDiveOnly || video.deepDive === true;
-    const matchesPostCandidate = !state.postCandidateOnly || video.postCandidate !== 'なし';
+    const matchesDecision = state.watchDecision === 'all' || video.watchDecision === state.watchDecision;
+    const matchesDeepDive = !state.deepDiveOnly || video.deepDive === 'あり';
+    const matchesPostCandidate = !state.contentUseOnly || video.contentUse !== 'なし';
 
     return matchesDecision && matchesDeepDive && matchesPostCandidate;
   });
@@ -363,11 +357,11 @@ function getFilteredVideos() {
 
 function getOrganizeStatus(video) {
   const hasSummary = video.summary && video.summary !== '未整理';
-  const hasPoints = Array.isArray(video.keyPoints) && video.keyPoints.some((point) => point && point !== '未整理');
-  const hasInsight = video.fortiesInsight && video.fortiesInsight !== '未整理';
-  const hasDecision = video.decision && video.decision !== 'D';
-  const hasDeepDive = video.deepDive !== null;
-  const hasPostCandidate = video.postCandidate && video.postCandidate !== 'なし';
+  const hasPoints = Array.isArray(video.points) && video.points.some((point) => point && point !== '未整理');
+  const hasInsight = video.insight && video.insight !== '未整理';
+  const hasDecision = video.watchDecision && video.watchDecision !== 'D';
+  const hasDeepDive = video.deepDive !== '未判定';
+  const hasPostCandidate = video.contentUse && video.contentUse !== 'なし';
 
   return hasSummary || hasPoints || hasInsight || hasDecision || hasDeepDive || hasPostCandidate ? '整理済み' : '未整理';
 }
@@ -381,7 +375,7 @@ function renderVideos() {
   videos.forEach((video) => {
     const card = elements.template.content.cloneNode(true);
 
-    card.querySelector('.channel').textContent = video.channelName;
+    card.querySelector('.channel').textContent = video.channel;
     card.querySelector('.published-date').textContent = video.publishedDate || '公開日未入力';
     card.querySelector('.title').textContent = video.title;
 
@@ -416,17 +410,17 @@ function renderVideos() {
     organizeStatus.textContent = isOrganized ? '整理済み' : '未整理';
     organizeStatus.classList.toggle('is-strong', isOrganized);
 
-    const decision = card.querySelector('.decision');
-    decision.textContent = decisionLabels[video.decision] ?? video.decision;
-    decision.classList.toggle('is-strong', video.decision === 'A' || video.decision === 'B');
+    const watchDecision = card.querySelector('.decision');
+    watchDecision.textContent = watchDecisionLabels[video.watchDecision] ?? video.watchDecision;
+    watchDecision.classList.toggle('is-strong', video.watchDecision === 'A' || video.watchDecision === 'B');
 
     const deepDive = card.querySelector('.deep-dive');
-    deepDive.textContent = video.deepDive === null ? '未判定' : video.deepDive ? 'あり' : 'なし';
-    deepDive.classList.toggle('is-strong', video.deepDive === true);
+    deepDive.textContent = video.deepDive;
+    deepDive.classList.toggle('is-strong', video.deepDive === 'あり');
 
-    const postCandidate = card.querySelector('.post-candidate');
-    postCandidate.textContent = video.postCandidate;
-    postCandidate.classList.toggle('is-strong', video.postCandidate !== 'なし');
+    const contentUse = card.querySelector('.post-candidate');
+    contentUse.textContent = video.contentUse;
+    contentUse.classList.toggle('is-strong', video.contentUse !== 'なし');
 
     card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
 
@@ -434,10 +428,10 @@ function renderVideos() {
     copyPromptButton.addEventListener('click', () => copyPrompt(video, copyPromptButton));
 
     card.querySelector('.summary').textContent = video.summary;
-    card.querySelector('.insight').textContent = video.fortiesInsight;
+    card.querySelector('.insight').textContent = video.insight;
 
     const points = card.querySelector('.points');
-    video.keyPoints.forEach((point) => {
+    video.points.forEach((point) => {
       const item = document.createElement('li');
       item.textContent = point;
       points.append(item);
@@ -458,7 +452,7 @@ function buildAiPrompt(video) {
     `重視する観点: ${template.promptFocus}`,
     '',
     `タイトル: ${video.title}`,
-    `チャンネル名: ${video.channelName}`,
+    `チャンネル名: ${video.channel}`,
     `URL: ${video.url}`,
     `気になった理由・メモ: ${note}`,
     '',
@@ -507,14 +501,14 @@ async function copyPrompt(video, button) {
 
 function getFormVideo() {
   const formData = new FormData(elements.addVideoForm);
-  const keyPoints = (formData.get('keyPoints') || '')
+  const points = (formData.get('points') || '')
     .split('\n')
     .map((point) => point.trim())
     .filter(Boolean);
   const deepDiveValue = formData.get('deepDive') || 'undecided';
 
   return normalizeLocalVideo({
-    channelName: formData.get('channelName').trim(),
+    channel: formData.get('channel').trim(),
     title: formData.get('title').trim(),
     url: formData.get('url').trim(),
     videoId: extractYouTubeVideoId(formData.get('url').trim()),
@@ -523,11 +517,11 @@ function getFormVideo() {
     organizeTemplate: formData.get('organizeTemplate') || defaultTemplate,
     publishedDate: formData.get('publishedDate') || '',
     summary: (formData.get('summary') || '').trim() || '未整理',
-    keyPoints: keyPoints.length > 0 ? keyPoints : ['未整理'],
-    fortiesInsight: (formData.get('fortiesInsight') || '').trim() || '未整理',
-    decision: formData.get('decision') || 'D',
-    deepDive: deepDiveValue === 'undecided' ? null : deepDiveValue === 'true',
-    postCandidate: formData.get('postCandidate') || 'なし',
+    points: points.length > 0 ? points : ['未整理'],
+    insight: (formData.get('insight') || '').trim() || '未整理',
+    watchDecision: formData.get('watchDecision') || 'D',
+    deepDive: deepDiveValue === 'undecided' ? '未判定' : deepDiveValue === 'true' ? 'あり' : 'なし',
+    contentUse: formData.get('contentUse') || 'なし',
   });
 }
 
@@ -591,9 +585,9 @@ function importLocalVideos(event) {
 
   reader.addEventListener('load', () => {
     try {
-      const videos = JSON.parse(reader.result);
+      const videos = JSON.parse(reader.result).map((video) => normalizeLocalVideo(video));
       validateVideos(videos, { allowLocalFields: true });
-      state.localVideos = videos.map((video) => normalizeLocalVideo(video));
+      state.localVideos = videos;
       saveLocalVideos();
       setStatus(elements.importStatus, `${state.localVideos.length}件の追加データをインポートしました。`, 'success');
       renderVideos();
@@ -620,8 +614,8 @@ function setDetailFieldsVisibility(visible) {
 }
 
 function bindEvents() {
-  elements.decisionFilter.addEventListener('change', (event) => {
-    state.decision = event.target.value;
+  elements.watchDecisionFilter.addEventListener('change', (event) => {
+    state.watchDecision = event.target.value;
     renderVideos();
   });
 
@@ -630,18 +624,18 @@ function bindEvents() {
     renderVideos();
   });
 
-  elements.postCandidateFilter.addEventListener('change', (event) => {
-    state.postCandidateOnly = event.target.checked;
+  elements.contentUseFilter.addEventListener('change', (event) => {
+    state.contentUseOnly = event.target.checked;
     renderVideos();
   });
 
   elements.resetFilters.addEventListener('click', () => {
-    state.decision = 'all';
+    state.watchDecision = 'all';
     state.deepDiveOnly = false;
-    state.postCandidateOnly = false;
-    elements.decisionFilter.value = 'all';
+    state.contentUseOnly = false;
+    elements.watchDecisionFilter.value = 'all';
     elements.deepDiveFilter.checked = false;
-    elements.postCandidateFilter.checked = false;
+    elements.contentUseFilter.checked = false;
     renderVideos();
   });
 
