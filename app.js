@@ -81,22 +81,106 @@ const requiredVideoFields = [
 
 const localOnlyFields = ['source'];
 
+const analysisPreferredFields = [
+  'summary',
+  'points',
+  'insight',
+  'watchDecision',
+  'deepDive',
+  'contentUse',
+  'risks',
+  'recommendedAction',
+  'status',
+  'geminiModel',
+  'geminiAnalyzedAt',
+];
+
 async function loadVideos() {
   try {
-    const response = await fetch('./videos.json', { cache: 'no-cache' });
+    const [baseVideos, analysisVideos] = await Promise.all([
+      fetchVideoJson('./videos.json', { required: true }),
+      fetchVideoJson('./data/videos.json', { required: false }),
+    ]);
 
-    if (!response.ok) {
-      throw new Error(`videos.jsonを読み込めませんでした: ${response.status}`);
-    }
-
-    const videos = (await response.json()).map((video) => normalizeVideo(video));
-    validateVideos(videos);
-    state.sampleVideos = videos.map((video) => ({ ...video, source: 'sample' }));
-    state.localVideos = loadLocalVideos();
+    const mergedSamples = mergeVideoCollections(baseVideos, analysisVideos);
+    validateVideos(mergedSamples);
+    state.sampleVideos = mergedSamples.map((video) => ({ ...video, source: 'sample' }));
+    state.localVideos = mergeLocalVideosWithAnalysis(loadLocalVideos(), analysisVideos);
     renderVideos();
   } catch (error) {
     showLoadError(error);
   }
+}
+
+async function fetchVideoJson(path, { required }) {
+  const response = await fetch(path, { cache: 'no-cache' });
+
+  if (!response.ok) {
+    if (!required && response.status === 404) {
+      return [];
+    }
+
+    throw new Error(`${path}を読み込めませんでした: ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    throw new Error(`${path}の形式が不正です: 配列である必要があります。`);
+  }
+
+  return data.map((video) => normalizeVideo(video));
+}
+
+function getVideoMergeKey(video) {
+  return video.videoId || extractYouTubeVideoId(video.url) || video.id;
+}
+
+function mergeAnalysisFields(target, analysis) {
+  const merged = { ...target, ...analysis };
+
+  analysisPreferredFields.forEach((field) => {
+    if (analysis[field] !== undefined && analysis[field] !== null) {
+      merged[field] = analysis[field];
+    }
+  });
+
+  return normalizeVideo(merged);
+}
+
+function mergeVideoCollections(baseVideos, analysisVideos) {
+  const videosByKey = new Map();
+  const orderedKeys = [];
+
+  baseVideos.forEach((video) => {
+    const key = getVideoMergeKey(video);
+    videosByKey.set(key, video);
+    orderedKeys.push(key);
+  });
+
+  analysisVideos.forEach((analysisVideo) => {
+    const key = getVideoMergeKey(analysisVideo);
+    if (!orderedKeys.includes(key)) {
+      orderedKeys.unshift(key);
+    }
+
+    videosByKey.set(key, mergeAnalysisFields(videosByKey.get(key) || {}, analysisVideo));
+  });
+
+  return orderedKeys.map((key) => videosByKey.get(key));
+}
+
+function mergeLocalVideosWithAnalysis(localVideos, analysisVideos) {
+  const analysisByKey = new Map(analysisVideos.map((video) => [getVideoMergeKey(video), video]));
+  const mergedVideos = localVideos.map((video) => {
+    const analysisVideo = analysisByKey.get(getVideoMergeKey(video));
+    return analysisVideo ? normalizeLocalVideo(mergeAnalysisFields(video, analysisVideo)) : video;
+  });
+
+  if (JSON.stringify(mergedVideos) !== JSON.stringify(localVideos)) {
+    localStorage.setItem(storageKey, JSON.stringify(mergedVideos, null, 2));
+  }
+
+  return mergedVideos;
 }
 
 function hasRequiredVideoValue(video, field) {
@@ -168,8 +252,8 @@ function normalizeVideo(video) {
   const transcript = normalizeTranscript(video);
   const normalized = {
     id: video.id || createLocalId(),
-    channel: video.channel ?? video.channelName ?? '',
-    title: video.title ?? '',
+    channel: video.channel || video.channelName || 'チャンネル未取得',
+    title: video.title || video.videoTitle || video.videoId || extractYouTubeVideoId(video.url) || 'タイトル未取得',
     url: video.url ?? '',
     publishedDate: video.publishedDate || '',
     summary: video.summary || '未整理',
@@ -178,6 +262,11 @@ function normalizeVideo(video) {
     watchDecision: ['A', 'B', 'C', 'D'].includes(video.watchDecision ?? video.decision) ? (video.watchDecision ?? video.decision) : 'D',
     deepDive: normalizeDeepDive(video.deepDive),
     contentUse: ['X', 'note', 'YouTube', 'なし'].includes(video.contentUse ?? video.postCandidate) ? (video.contentUse ?? video.postCandidate) : 'なし',
+    risks: typeof video.risks === 'string' ? video.risks : '',
+    recommendedAction: typeof video.recommendedAction === 'string' ? video.recommendedAction : '',
+    status: typeof video.status === 'string' ? video.status : '',
+    geminiModel: typeof video.geminiModel === 'string' ? video.geminiModel : '',
+    geminiAnalyzedAt: typeof video.geminiAnalyzedAt === 'string' ? video.geminiAnalyzedAt : '',
     note: typeof video.note === 'string' ? video.note : '',
     transcript,
     transcriptSourceNote: typeof video.transcriptSourceNote === 'string' ? video.transcriptSourceNote : '',
@@ -454,7 +543,7 @@ function getOrganizeStatus(video) {
   const hasDeepDive = video.deepDive !== '未判定';
   const hasPostCandidate = video.contentUse && video.contentUse !== 'なし';
 
-  return hasSummary || hasPoints || hasInsight || hasDecision || hasDeepDive || hasPostCandidate ? '整理済み' : '未整理';
+  return video.status || (hasSummary || hasPoints || hasInsight || hasDecision || hasDeepDive || hasPostCandidate ? '整理済み' : '未整理');
 }
 
 
@@ -631,6 +720,8 @@ function renderVideos() {
 
     card.querySelector('.summary').textContent = video.summary;
     card.querySelector('.insight').textContent = video.insight;
+    card.querySelector('.risks').textContent = video.risks || 'なし';
+    card.querySelector('.recommended-action').textContent = video.recommendedAction || 'なし';
 
     const points = card.querySelector('.points');
     video.points.forEach((point) => {
