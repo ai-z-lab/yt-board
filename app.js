@@ -211,7 +211,7 @@ function normalizeTranscript(video) {
 }
 
 function hasTranscript(video) {
-  return typeof video.transcript === 'string' && video.transcript.length > 0;
+  return typeof video.transcript === 'string' && video.transcript.trim().length > 0;
 }
 
 function normalizeLocalVideo(video) {
@@ -453,29 +453,39 @@ function renderVideos() {
 
     const transcriptStatus = card.querySelector('.transcript-status');
     const hasTranscriptText = hasTranscript(video);
-    transcriptStatus.textContent = hasTranscriptText ? '本文あり' : '本文なし';
+    transcriptStatus.textContent = hasTranscriptText ? '本文あり：AI整理可能' : '本文なし：タイトル情報のみ';
     transcriptStatus.classList.toggle('is-strong', hasTranscriptText);
+    transcriptStatus.classList.toggle('is-warning', !hasTranscriptText);
+
+    const transcriptNotice = card.querySelector('.transcript-notice');
+    transcriptNotice.hidden = hasTranscriptText;
 
     card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
 
     const copyPromptButton = card.querySelector('.copy-prompt');
+    copyPromptButton.textContent = hasTranscriptText ? '本文ベース整理プロンプトをコピー' : '仮判定プロンプトをコピー';
     copyPromptButton.addEventListener('click', () => copyPrompt(video, copyPromptButton));
 
-    const editButton = card.querySelector('.edit-video');
+    const transcriptButton = card.querySelector('.add-transcript');
+    const transcriptPanel = card.querySelector('.transcript-panel');
+    transcriptButton.addEventListener('click', () => {
+      transcriptPanel.hidden = !transcriptPanel.hidden;
+      transcriptButton.textContent = transcriptPanel.hidden ? '文字起こしを追加' : '文字起こし欄を閉じる';
+    });
+
     const editForm = card.querySelector('.edit-video-form');
+    editForm.elements.transcript.value = video.transcript;
+    editForm.elements.transcriptSourceNote.value = video.transcriptSourceNote;
+
     if (video.source === 'local') {
-      editButton.hidden = false;
-      editForm.elements.transcript.value = video.transcript;
-      editForm.elements.transcriptSourceNote.value = video.transcriptSourceNote;
-      editButton.addEventListener('click', () => {
-        editForm.hidden = !editForm.hidden;
-        editButton.textContent = editForm.hidden ? '編集' : '編集を閉じる';
-      });
-      editForm.querySelector('.cancel-edit').addEventListener('click', () => {
-        editForm.hidden = true;
-        editButton.textContent = '編集';
-      });
       editForm.addEventListener('submit', (event) => updateLocalVideoTranscript(event, video.id));
+    } else {
+      editForm.querySelector('.transcript-save').disabled = true;
+      editForm.querySelector('.transcript-save').textContent = 'サンプルは保存不可';
+      editForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        setStatus(elements.importStatus, 'サンプルデータは画面から更新できません。動画を追加してから文字起こしを保存してください。', 'error');
+      });
     }
 
     card.querySelector('.summary').textContent = video.summary;
