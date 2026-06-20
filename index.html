@@ -43,6 +43,14 @@
           動画URL
           <input type="url" name="url" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." required>
         </label>
+        <div class="fetch-video-row">
+          <button type="button" id="fetchVideoInfo" class="secondary-button">動画情報を取得</button>
+          <p id="autoFillStatus" class="status-message compact" aria-live="polite"></p>
+        </div>
+        <div id="thumbnailPreview" class="thumbnail-preview full-field" hidden>
+          <img alt="入力したYouTube動画のサムネイルプレビュー">
+          <span class="thumbnail-caption">サムネイルを自動表示しています</span>
+        </div>
         <label>
           チャンネル名
           <input type="text" name="channelName" autocomplete="organization" required>
@@ -155,6 +163,9 @@
         <span class="source-badge badge"></span>
       </div>
       <button type="button" class="delete-video" hidden>削除</button>
+      <a class="thumbnail-link" target="_blank" rel="noopener noreferrer" hidden>
+        <img class="thumbnail" alt="">
+      </a>
       <h3 class="title"></h3>
       <a class="url" target="_blank" rel="noopener noreferrer"></a>
       <div class="content-block note-block">
