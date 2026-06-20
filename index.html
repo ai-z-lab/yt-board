@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>動画仕分けボード</title>
+  <title>YouTube動画仕分けボード</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="site-header">
     <div class="header-inner">
       <p class="eyebrow">YouTube Sorting Board</p>
-      <h1>動画仕分けボード</h1>
-      <p class="lead">気になるYouTube動画を、見る前に「要約」「視聴判断」「40代のリアル向け発信価値」で整理する軽量Webアプリです。</p>
+      <h1>YouTube動画仕分けボード</h1>
+      <p class="lead">気になるYouTube動画を、見る前に「要約」「視聴判断」「自分向け示唆」で整理する軽量Webアプリです。</p>
     </div>
   </header>
 
@@ -59,6 +59,18 @@
           動画タイトル
           <input type="text" name="title" required>
         </label>
+        <label>
+          整理テンプレート
+          <select name="organizeTemplate">
+            <option value="general" selected>汎用リサーチ</option>
+            <option value="sns">SNS投稿ネタ化</option>
+            <option value="youtube">YouTube企画化</option>
+            <option value="note">note記事化</option>
+            <option value="aiNews">AIニュース分析</option>
+            <option value="manager">管理職・現場視点</option>
+            <option value="fortiesReal">40代のリアル</option>
+          </select>
+        </label>
         <label class="full-field">
           気になった理由・メモ
           <textarea name="note" rows="3" placeholder="あとで見返したい理由、気になった切り口など" required></textarea>
@@ -81,7 +93,7 @@
             <textarea name="keyPoints" rows="5" placeholder="未入力なら「未整理」で保存されます"></textarea>
           </label>
           <label class="full-field">
-            40代のリアル向け示唆
+            自分向け示唆
             <textarea name="fortiesInsight" rows="4" placeholder="未入力なら「未整理」で保存されます"></textarea>
           </label>
           <label>
@@ -161,6 +173,7 @@
         <span class="channel"></span>
         <span class="published-date"></span>
         <span class="source-badge badge"></span>
+        <span class="organize-template template-badge"></span>
       </div>
       <button type="button" class="delete-video" hidden>削除</button>
       <a class="thumbnail-link" target="_blank" rel="noopener noreferrer" hidden>
@@ -168,6 +181,7 @@
       </a>
       <h3 class="title"></h3>
       <a class="url" target="_blank" rel="noopener noreferrer"></a>
+      <button type="button" class="copy-prompt secondary-button">AI整理プロンプトをコピー</button>
       <div class="content-block note-block">
         <h4>気になった理由・メモ</h4>
         <p class="note"></p>
@@ -189,6 +203,10 @@
           <dt>投稿化候補</dt>
           <dd class="post-candidate badge"></dd>
         </div>
+        <div>
+          <dt>テーマとの関係</dt>
+          <dd class="theme-relation">テンプレート別に整理</dd>
+        </div>
       </dl>
       <div class="content-block">
         <h4>要約</h4>
@@ -199,7 +217,7 @@
         <ul class="points"></ul>
       </div>
       <div class="content-block insight-block">
-        <h4>40代のリアル向け示唆</h4>
+        <h4>自分向け示唆</h4>
         <p class="insight"></p>
       </div>
     </article>

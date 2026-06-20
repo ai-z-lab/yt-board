@@ -1,3 +1,36 @@
+const organizeTemplates = {
+  general: {
+    label: '汎用リサーチ',
+    promptFocus: '要点、論点、見る価値、追加調査',
+  },
+  sns: {
+    label: 'SNS投稿ネタ化',
+    promptFocus: 'X/Threads向けの切り口、炎上注意点、投稿案',
+  },
+  youtube: {
+    label: 'YouTube企画化',
+    promptFocus: '動画企画、ショート化、台本の切り口',
+  },
+  note: {
+    label: 'note記事化',
+    promptFocus: '記事テーマ、見出し、読者に刺さる論点',
+  },
+  aiNews: {
+    label: 'AIニュース分析',
+    promptFocus: '事実確認、一次情報、リスク、活用可能性',
+  },
+  manager: {
+    label: '管理職・現場視点',
+    promptFocus: '現場で起きそうなズレ、管理職への示唆',
+  },
+  fortiesReal: {
+    label: '40代のリアル',
+    promptFocus: '管理職、現場、AI活用、働き方、SNS、世代間ギャップの観点で整理',
+  },
+};
+
+const defaultTemplate = 'general';
+
 const decisionLabels = {
   A: 'A 全部見る',
   B: 'B 該当箇所だけ見る',
@@ -64,7 +97,7 @@ async function loadVideos() {
 
     const videos = await response.json();
     validateVideos(videos);
-    state.sampleVideos = videos.map((video) => ({ ...video, source: 'sample' }));
+    state.sampleVideos = videos.map((video) => normalizeVideo({ ...video, source: 'sample' }));
     state.localVideos = loadLocalVideos();
     renderVideos();
   } catch (error) {
@@ -138,6 +171,21 @@ function saveLocalVideos() {
   localStorage.setItem(storageKey, JSON.stringify(state.localVideos, null, 2));
 }
 
+function normalizeTemplate(template) {
+  return template in organizeTemplates ? template : defaultTemplate;
+}
+
+function getTemplateLabel(template) {
+  return organizeTemplates[normalizeTemplate(template)].label;
+}
+
+function normalizeVideo(video) {
+  return {
+    ...video,
+    organizeTemplate: normalizeTemplate(video.organizeTemplate),
+  };
+}
+
 function normalizeLocalVideo(video) {
   return {
     ...video,
@@ -151,6 +199,7 @@ function normalizeLocalVideo(video) {
     decision: video.decision || 'D',
     deepDive: typeof video.deepDive === 'boolean' ? video.deepDive : null,
     postCandidate: video.postCandidate || 'なし',
+    organizeTemplate: normalizeTemplate(video.organizeTemplate),
     videoId: video.videoId || extractYouTubeVideoId(video.url) || '',
     thumbnailUrl: video.thumbnailUrl || getYouTubeThumbnailUrl(video.videoId || extractYouTubeVideoId(video.url)) || '',
   };
@@ -379,6 +428,11 @@ function renderVideos() {
     postCandidate.textContent = video.postCandidate;
     postCandidate.classList.toggle('is-strong', video.postCandidate !== 'なし');
 
+    card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
+
+    const copyPromptButton = card.querySelector('.copy-prompt');
+    copyPromptButton.addEventListener('click', () => copyPrompt(video, copyPromptButton));
+
     card.querySelector('.summary').textContent = video.summary;
     card.querySelector('.insight').textContent = video.fortiesInsight;
 
@@ -391,6 +445,64 @@ function renderVideos() {
 
     elements.videoList.append(card);
   });
+}
+
+function buildAiPrompt(video) {
+  const template = organizeTemplates[normalizeTemplate(video.organizeTemplate)];
+  const note = video.note || 'メモなし';
+
+  return [
+    '以下のYouTube動画を、見る前に仕分けるために整理してください。',
+    '',
+    `整理テンプレート: ${template.label}`,
+    `重視する観点: ${template.promptFocus}`,
+    '',
+    `タイトル: ${video.title}`,
+    `チャンネル名: ${video.channelName}`,
+    `URL: ${video.url}`,
+    `気になった理由・メモ: ${note}`,
+    '',
+    '出力してほしい項目:',
+    '1. 要約（3〜5行）',
+    '2. 重要ポイント（箇条書き）',
+    '3. 自分向け示唆',
+    '4. テーマとの関係',
+    '5. 視聴判断（A 全部見る / B 該当箇所だけ見る / C 要約で十分 / D 保留）',
+    '6. 深掘り候補の有無',
+    '7. 投稿化候補（X / note / YouTube / なし）',
+  ].join('\n');
+}
+
+async function copyPrompt(video, button) {
+  const prompt = buildAiPrompt(video);
+  const originalText = button.textContent;
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(prompt);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = prompt;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+
+    button.textContent = 'コピーしました';
+    window.setTimeout(() => {
+      button.textContent = originalText;
+    }, 1800);
+  } catch (error) {
+    console.error(error);
+    button.textContent = 'コピー失敗';
+    window.setTimeout(() => {
+      button.textContent = originalText;
+    }, 1800);
+  }
 }
 
 function getFormVideo() {
@@ -408,6 +520,7 @@ function getFormVideo() {
     videoId: extractYouTubeVideoId(formData.get('url').trim()),
     thumbnailUrl: getYouTubeThumbnailUrl(extractYouTubeVideoId(formData.get('url').trim())),
     note: formData.get('note').trim(),
+    organizeTemplate: formData.get('organizeTemplate') || defaultTemplate,
     publishedDate: formData.get('publishedDate') || '',
     summary: (formData.get('summary') || '').trim() || '未整理',
     keyPoints: keyPoints.length > 0 ? keyPoints : ['未整理'],
