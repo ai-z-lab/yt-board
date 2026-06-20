@@ -1,0 +1,9 @@
+{
+  "name": "yt-board",
+  "version": "1.0.0",
+  "private": true,
+  "description": "YouTube動画を仕分けるための軽量静的Webアプリ",
+  "scripts": {
+    "fetch-transcripts": "node scripts/fetch-transcripts.js"
+  }
+}
