@@ -181,6 +181,9 @@ function normalizeVideo(video) {
     note: typeof video.note === 'string' ? video.note : '',
     transcript,
     transcriptSourceNote: typeof video.transcriptSourceNote === 'string' ? video.transcriptSourceNote : '',
+    transcriptStatus: normalizeTranscriptStatus(video.transcriptStatus, transcript),
+    transcriptError: typeof video.transcriptError === 'string' ? video.transcriptError : '',
+    transcriptUpdatedAt: typeof video.transcriptUpdatedAt === 'string' ? video.transcriptUpdatedAt : '',
     source: video.source,
     organizeTemplate: normalizeTemplate(video.organizeTemplate),
     videoId: video.videoId || extractYouTubeVideoId(video.url) || '',
@@ -212,6 +215,14 @@ function normalizeTranscript(video) {
 
 function hasTranscript(video) {
   return typeof video.transcript === 'string' && video.transcript.trim().length > 0;
+}
+
+function normalizeTranscriptStatus(status, transcript = '') {
+  if (status === 'available' || status === 'unavailable' || status === 'checking') {
+    return status;
+  }
+
+  return typeof transcript === 'string' && transcript.trim() ? 'available' : 'unchecked';
 }
 
 function normalizeLocalVideo(video) {
@@ -264,6 +275,57 @@ function sanitizeYouTubeVideoId(value) {
 
 function getYouTubeThumbnailUrl(videoId) {
   return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
+}
+
+function decodeXmlText(text) {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseTranscriptXml(xml) {
+  return [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)]
+    .map((match) => decodeXmlText(match[1]))
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+async function fetchTranscriptInBrowser(videoId) {
+  const languages = ['ja', 'ja-JP', 'en', 'en-US'];
+  const errors = [];
+
+  for (const language of languages) {
+    const transcriptUrl = new URL('https://video.google.com/timedtext');
+    transcriptUrl.searchParams.set('v', videoId);
+    transcriptUrl.searchParams.set('lang', language);
+
+    try {
+      const response = await fetch(transcriptUrl);
+      if (!response.ok) {
+        errors.push(`${language}: HTTP ${response.status}`);
+        continue;
+      }
+
+      const transcript = parseTranscriptXml(await response.text());
+      if (transcript) {
+        return { transcript, source: `ブラウザ timedtext:${language}` };
+      }
+
+      errors.push(`${language}: 空の字幕`);
+    } catch (error) {
+      errors.push(`${language}: ${error.message}`);
+    }
+  }
+
+  throw new Error(`ブラウザから字幕を取得できませんでした。CORS、YouTube側の制限、または字幕なしの可能性があります（${errors.join(' / ')}）。`);
 }
 
 function getFormControls() {
@@ -395,6 +457,80 @@ function getOrganizeStatus(video) {
   return hasSummary || hasPoints || hasInsight || hasDecision || hasDeepDive || hasPostCandidate ? '整理済み' : '未整理';
 }
 
+
+function getTranscriptStatusLabel(video, hasTranscriptText) {
+  if (hasTranscriptText) return '本文あり：AI整理可能';
+  if (video.transcriptStatus === 'unavailable') return '取得不可：本文なし';
+  if (video.transcriptStatus === 'checking') return '取得確認中';
+  return '本文なし：タイトル情報のみ';
+}
+
+function getTranscriptTrialMessage(video) {
+  const messages = [];
+  if (video.videoId) messages.push(`videoId: ${video.videoId}`);
+  if (video.transcriptStatus === 'available' && video.transcriptUpdatedAt) messages.push(`取得済み: ${video.transcriptUpdatedAt}`);
+  if (video.transcriptStatus === 'unavailable' && video.transcriptError) messages.push(`前回失敗: ${video.transcriptError}`);
+  return messages.join(' / ');
+}
+
+function persistTranscriptTrialResult(videoId, result) {
+  state.localVideos = state.localVideos.map((video) => video.id === videoId
+    ? normalizeLocalVideo({ ...video, ...result })
+    : video);
+  saveLocalVideos();
+}
+
+async function tryFetchTranscript(video, button, statusElement) {
+  const videoId = video.videoId || extractYouTubeVideoId(video.url);
+  if (!videoId) {
+    statusElement.textContent = 'videoIdを取得できませんでした。対応しているYouTube URLか確認してください。';
+    statusElement.className = 'status-message error';
+    return;
+  }
+
+  button.disabled = true;
+  statusElement.textContent = `videoId=${videoId} でブラウザから文字起こし取得を試しています...`;
+  statusElement.className = 'status-message';
+
+  try {
+    const result = await fetchTranscriptInBrowser(videoId);
+    const update = {
+      videoId,
+      transcript: result.transcript,
+      transcriptStatus: 'available',
+      transcriptError: '',
+      transcriptUpdatedAt: new Date().toISOString(),
+      transcriptSourceNote: video.transcriptSourceNote || result.source,
+    };
+
+    if (video.source === 'local') {
+      persistTranscriptTrialResult(video.id, update);
+      setStatus(elements.importStatus, 'ブラウザから文字起こしを取得し、localStorageに保存しました。', 'success');
+      renderVideos();
+    } else {
+      statusElement.textContent = '文字起こしを取得できました。サンプルカードは保存できないため、必要なら動画を追加して保存してください。';
+      statusElement.className = 'status-message success';
+    }
+  } catch (error) {
+    const update = {
+      videoId,
+      transcriptStatus: 'unavailable',
+      transcriptError: error.message,
+      transcriptUpdatedAt: new Date().toISOString(),
+    };
+
+    if (video.source === 'local') {
+      persistTranscriptTrialResult(video.id, update);
+      saveLocalVideos();
+    }
+
+    statusElement.textContent = error.message;
+    statusElement.className = 'status-message error';
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderVideos() {
   const videos = getFilteredVideos();
   resetListState();
@@ -453,7 +589,7 @@ function renderVideos() {
 
     const transcriptStatus = card.querySelector('.transcript-status');
     const hasTranscriptText = hasTranscript(video);
-    transcriptStatus.textContent = hasTranscriptText ? '本文あり：AI整理可能' : '本文なし：タイトル情報のみ';
+    transcriptStatus.textContent = getTranscriptStatusLabel(video, hasTranscriptText);
     transcriptStatus.classList.toggle('is-strong', hasTranscriptText);
     transcriptStatus.classList.toggle('is-warning', !hasTranscriptText);
 
@@ -465,6 +601,11 @@ function renderVideos() {
     const copyPromptButton = card.querySelector('.copy-prompt');
     copyPromptButton.textContent = hasTranscriptText ? '本文ベース整理プロンプトをコピー' : '仮判定プロンプトをコピー';
     copyPromptButton.addEventListener('click', () => copyPrompt(video, copyPromptButton));
+
+    const transcriptTrialButton = card.querySelector('.try-transcript-fetch');
+    const transcriptTrialStatus = card.querySelector('.transcript-trial-status');
+    transcriptTrialStatus.textContent = getTranscriptTrialMessage(video);
+    transcriptTrialButton.addEventListener('click', () => tryFetchTranscript(video, transcriptTrialButton, transcriptTrialStatus));
 
     const transcriptButton = card.querySelector('.add-transcript');
     const transcriptPanel = card.querySelector('.transcript-panel');
@@ -643,6 +784,7 @@ function getFormVideo() {
     watchDecision: formData.get('watchDecision') || 'D',
     deepDive: deepDiveValue === 'undecided' ? '未判定' : deepDiveValue === 'true' ? 'あり' : 'なし',
     contentUse: formData.get('contentUse') || 'なし',
+    transcriptStatus: (formData.get('transcript') || '').trim() ? 'available' : 'unchecked',
   });
 }
 
@@ -674,6 +816,9 @@ function updateLocalVideoTranscript(event, id) {
         ...video,
         transcript: formData.get('transcript') || '',
         transcriptSourceNote: (formData.get('transcriptSourceNote') || '').trim(),
+        transcriptStatus: (formData.get('transcript') || '').trim() ? 'available' : 'unchecked',
+        transcriptError: '',
+        transcriptUpdatedAt: new Date().toISOString(),
       })
     : video);
   saveLocalVideos();
