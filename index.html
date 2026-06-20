@@ -53,7 +53,7 @@
         </div>
         <label>
           チャンネル名
-          <input type="text" name="channelName" autocomplete="organization" required>
+          <input type="text" name="channel" autocomplete="organization" required>
         </label>
         <label>
           動画タイトル
@@ -90,15 +90,15 @@
           </label>
           <label class="full-field">
             重要ポイント（1行に1つ）
-            <textarea name="keyPoints" rows="5" placeholder="未入力なら「未整理」で保存されます"></textarea>
+            <textarea name="points" rows="5" placeholder="未入力なら「未整理」で保存されます"></textarea>
           </label>
           <label class="full-field">
             自分向け示唆
-            <textarea name="fortiesInsight" rows="4" placeholder="未入力なら「未整理」で保存されます"></textarea>
+            <textarea name="insight" rows="4" placeholder="未入力なら「未整理」で保存されます"></textarea>
           </label>
           <label>
             視聴判断
-            <select name="decision">
+            <select name="watchDecision">
               <option value="D" selected>D 保留</option>
               <option value="A">A 全部見る</option>
               <option value="B">B 該当箇所だけ見る</option>
@@ -115,7 +115,7 @@
           </label>
           <label>
             投稿化候補
-            <select name="postCandidate">
+            <select name="contentUse">
               <option value="なし" selected>なし</option>
               <option value="X">X</option>
               <option value="note">note</option>
