@@ -719,9 +719,31 @@ function renderVideos() {
     }
 
     card.querySelector('.summary').textContent = video.summary;
+    card.querySelector('.summary-full').textContent = video.summary;
     card.querySelector('.insight').textContent = video.insight;
     card.querySelector('.risks').textContent = video.risks || 'なし';
     card.querySelector('.recommended-action').textContent = video.recommendedAction || 'なし';
+
+    const analysisDetails = card.querySelector('.analysis-details');
+    const toggleAnalysisButton = card.querySelector('.toggle-analysis');
+    toggleAnalysisButton.addEventListener('click', () => {
+      const isOpen = analysisDetails.hidden;
+      analysisDetails.hidden = !isOpen;
+      toggleAnalysisButton.setAttribute('aria-expanded', String(isOpen));
+      toggleAnalysisButton.textContent = isOpen ? '詳細を閉じる' : '詳細を見る';
+    });
+
+    const transcriptDetail = card.querySelector('.transcript-detail');
+    const toggleTranscriptDetailButton = card.querySelector('.toggle-transcript-detail');
+    const transcriptFull = card.querySelector('.transcript-full');
+    transcriptFull.textContent = hasTranscriptText ? video.transcript : '文字起こし・本文は未入力です。';
+    card.querySelector('.transcript-source-note').textContent = video.transcriptSourceNote ? `取得方法: ${video.transcriptSourceNote}` : '取得方法メモなし';
+    toggleTranscriptDetailButton.addEventListener('click', () => {
+      const isOpen = transcriptDetail.hidden;
+      transcriptDetail.hidden = !isOpen;
+      toggleTranscriptDetailButton.setAttribute('aria-expanded', String(isOpen));
+      toggleTranscriptDetailButton.textContent = isOpen ? '文字起こしを閉じる' : '文字起こしを表示';
+    });
 
     const points = card.querySelector('.points');
     video.points.forEach((point) => {

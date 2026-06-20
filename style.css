@@ -651,3 +651,67 @@ button:hover,
   cursor: wait;
   opacity: 0.7;
 }
+
+.summary-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.toggle-analysis {
+  width: 100%;
+  justify-content: center;
+}
+
+.analysis-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(79, 209, 197, 0.28);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.analysis-details[hidden],
+.transcript-detail[hidden] {
+  display: none;
+}
+
+.detail-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.transcript-detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transcript-detail {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(7, 17, 31, 0.44);
+}
+
+.transcript-source-note {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.transcript-full {
+  max-height: 28rem;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--muted);
+  font: inherit;
+}

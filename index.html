@@ -250,26 +250,41 @@
           <dd class="theme-relation">テンプレート別に整理</dd>
         </div>
       </dl>
-      <div class="content-block">
+      <div class="content-block summary-preview-block">
         <h4>要約</h4>
-        <p class="summary"></p>
+        <p class="summary summary-preview"></p>
       </div>
-      <div class="content-block">
-        <h4>重要ポイント</h4>
-        <ul class="points"></ul>
-      </div>
-      <div class="content-block insight-block">
-        <h4>自分向け示唆</h4>
-        <p class="insight"></p>
-      </div>
-      <div class="content-block">
-        <h4>注意点</h4>
-        <p class="risks"></p>
-      </div>
-      <div class="content-block">
-        <h4>推奨アクション</h4>
-        <p class="recommended-action"></p>
-      </div>
+      <button type="button" class="toggle-analysis primary-button" aria-expanded="false">詳細を見る</button>
+      <section class="analysis-details" hidden aria-label="Gemini解析結果の詳細">
+        <div class="content-block">
+          <h4>要約全文</h4>
+          <p class="summary-full detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>重要ポイント全文</h4>
+          <ul class="points"></ul>
+        </div>
+        <div class="content-block insight-block">
+          <h4>自分向け示唆全文</h4>
+          <p class="insight detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>注意点</h4>
+          <p class="risks detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>推奨アクション</h4>
+          <p class="recommended-action detail-text"></p>
+        </div>
+        <div class="content-block transcript-detail-block">
+          <button type="button" class="toggle-transcript-detail secondary-button" aria-expanded="false">文字起こしを表示</button>
+          <div class="transcript-detail" hidden>
+            <h4>文字起こし・本文</h4>
+            <p class="transcript-source-note"></p>
+            <pre class="transcript-full detail-text"></pre>
+          </div>
+        </div>
+      </section>
     </article>
   </template>
 
