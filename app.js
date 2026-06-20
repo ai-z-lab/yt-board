@@ -34,6 +34,9 @@ const elements = {
   importStatus: document.querySelector('#importStatus'),
   toggleDetails: document.querySelector('#toggleDetails'),
   detailFields: document.querySelector('#detailFields'),
+  fetchVideoInfo: document.querySelector('#fetchVideoInfo'),
+  autoFillStatus: document.querySelector('#autoFillStatus'),
+  thumbnailPreview: document.querySelector('#thumbnailPreview'),
 };
 
 const requiredVideoFields = [
@@ -148,8 +151,106 @@ function normalizeLocalVideo(video) {
     decision: video.decision || 'D',
     deepDive: typeof video.deepDive === 'boolean' ? video.deepDive : null,
     postCandidate: video.postCandidate || 'なし',
+    videoId: video.videoId || extractYouTubeVideoId(video.url) || '',
+    thumbnailUrl: video.thumbnailUrl || getYouTubeThumbnailUrl(video.videoId || extractYouTubeVideoId(video.url)) || '',
   };
 }
+
+function extractYouTubeVideoId(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return '';
+  }
+
+  try {
+    const url = new URL(rawUrl.trim());
+    const hostname = url.hostname.replace(/^www\./, '');
+
+    if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
+      if (url.pathname === '/watch') {
+        return sanitizeYouTubeVideoId(url.searchParams.get('v'));
+      }
+
+      const pathMatch = url.pathname.match(/^\/(shorts|embed)\/([^/?#]+)/);
+      return sanitizeYouTubeVideoId(pathMatch?.[2]);
+    }
+
+    if (hostname === 'youtu.be') {
+      return sanitizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[0]);
+    }
+  } catch (error) {
+    return '';
+  }
+
+  return '';
+}
+
+function sanitizeYouTubeVideoId(value) {
+  return /^[A-Za-z0-9_-]{11}$/.test(value || '') ? value : '';
+}
+
+function getYouTubeThumbnailUrl(videoId) {
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
+}
+
+function getFormControls() {
+  return {
+    url: elements.addVideoForm.elements.url,
+    title: elements.addVideoForm.elements.title,
+    channelName: elements.addVideoForm.elements.channelName,
+  };
+}
+
+function updateThumbnailPreview(thumbnailUrl) {
+  const image = elements.thumbnailPreview.querySelector('img');
+  elements.thumbnailPreview.hidden = !thumbnailUrl;
+  image.src = thumbnailUrl || '';
+}
+
+async function fetchVideoInfo() {
+  const { url: urlInput, title, channelName } = getFormControls();
+  const rawUrl = urlInput.value.trim();
+  const videoId = extractYouTubeVideoId(rawUrl);
+
+  if (!rawUrl) {
+    updateThumbnailPreview('');
+    setStatus(elements.autoFillStatus, '', '');
+    return;
+  }
+
+  if (!videoId) {
+    updateThumbnailPreview('');
+    setStatus(elements.autoFillStatus, '対応しているYouTube URLを入力してください。', 'error');
+    return;
+  }
+
+  updateThumbnailPreview(getYouTubeThumbnailUrl(videoId));
+  setStatus(elements.autoFillStatus, 'サムネイルを表示しました。タイトル・チャンネル名を取得中です…', '');
+
+  try {
+    const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`;
+    const response = await fetch(oEmbedUrl);
+
+    if (!response.ok) {
+      throw new Error(`oEmbed request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.title && !title.value.trim()) {
+      title.value = data.title;
+    }
+
+    if (data.author_name && !channelName.value.trim()) {
+      channelName.value = data.author_name;
+    }
+
+    setStatus(elements.autoFillStatus, '動画ID・サムネイル・取得できた動画情報を反映しました。', 'success');
+  } catch (error) {
+    console.warn(error);
+    setStatus(elements.autoFillStatus, 'タイトル・チャンネル名は自動取得できませんでした。手入力してください', '');
+  }
+}
+
 
 function createLocalId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -231,6 +332,17 @@ function renderVideos() {
     deleteButton.hidden = video.source !== 'local';
     deleteButton.addEventListener('click', () => deleteLocalVideo(video.id));
 
+    const thumbnailUrl = video.thumbnailUrl || getYouTubeThumbnailUrl(video.videoId || extractYouTubeVideoId(video.url));
+    const thumbnailLink = card.querySelector('.thumbnail-link');
+    const thumbnail = card.querySelector('.thumbnail');
+
+    if (thumbnailUrl) {
+      thumbnailLink.hidden = false;
+      thumbnailLink.href = video.url;
+      thumbnail.src = thumbnailUrl;
+      thumbnail.alt = `${video.title}のサムネイル`;
+    }
+
     const link = card.querySelector('.url');
     link.href = video.url;
     link.textContent = video.url;
@@ -281,6 +393,8 @@ function getFormVideo() {
     channelName: formData.get('channelName').trim(),
     title: formData.get('title').trim(),
     url: formData.get('url').trim(),
+    videoId: extractYouTubeVideoId(formData.get('url').trim()),
+    thumbnailUrl: getYouTubeThumbnailUrl(extractYouTubeVideoId(formData.get('url').trim())),
     note: formData.get('note').trim(),
     publishedDate: formData.get('publishedDate') || '',
     summary: (formData.get('summary') || '').trim() || '未整理',
@@ -301,6 +415,8 @@ function addLocalVideo(event) {
     state.localVideos.unshift(video);
     saveLocalVideos();
     elements.addVideoForm.reset();
+    updateThumbnailPreview('');
+    setStatus(elements.autoFillStatus, '', '');
     setDetailFieldsVisibility(false);
     setStatus(elements.formStatus, '動画を追加しました。ブラウザのlocalStorageに保存されています。', 'success');
     renderVideos();
@@ -415,8 +531,15 @@ function bindEvents() {
   });
 
   elements.addVideoForm.addEventListener('reset', () => {
-    window.setTimeout(() => setDetailFieldsVisibility(false), 0);
+    window.setTimeout(() => {
+      setDetailFieldsVisibility(false);
+      updateThumbnailPreview('');
+      setStatus(elements.autoFillStatus, '', '');
+    }, 0);
   });
+
+  elements.fetchVideoInfo.addEventListener('click', fetchVideoInfo);
+  elements.addVideoForm.elements.url.addEventListener('blur', fetchVideoInfo);
 
   elements.addVideoForm.addEventListener('submit', addLocalVideo);
   elements.exportButton.addEventListener('click', exportLocalVideos);

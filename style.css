@@ -514,3 +514,49 @@ button:hover,
     font-size: 1rem;
   }
 }
+
+.thumbnail-link,
+.thumbnail-preview {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.thumbnail-link[hidden],
+.thumbnail-preview[hidden] {
+  display: none;
+}
+
+.thumbnail,
+.thumbnail-preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.thumbnail-preview {
+  max-width: 420px;
+}
+
+.thumbnail-caption {
+  display: block;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.fetch-video-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: 6px;
+}
+
+.status-message.compact {
+  margin-top: 0;
+  font-size: 0.82rem;
+}
