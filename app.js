@@ -137,6 +137,12 @@ function loadLocalVideos() {
   try {
     const videos = JSON.parse(saved).map((video) => normalizeLocalVideo(video));
     validateVideos(videos, { allowLocalFields: true });
+
+    const normalizedData = JSON.stringify(videos, null, 2);
+    if (normalizedData !== saved) {
+      localStorage.setItem(storageKey, normalizedData);
+    }
+
     return videos;
   } catch (error) {
     console.error(error);
@@ -159,6 +165,7 @@ function getTemplateLabel(template) {
 
 function normalizeVideo(video) {
   const points = video.points ?? video.keyPoints;
+  const transcript = normalizeTranscript(video);
   const normalized = {
     id: video.id || createLocalId(),
     channel: video.channel ?? video.channelName ?? '',
@@ -172,7 +179,7 @@ function normalizeVideo(video) {
     deepDive: normalizeDeepDive(video.deepDive),
     contentUse: ['X', 'note', 'YouTube', 'なし'].includes(video.contentUse ?? video.postCandidate) ? (video.contentUse ?? video.postCandidate) : 'なし',
     note: typeof video.note === 'string' ? video.note : '',
-    transcript: typeof video.transcript === 'string' ? video.transcript : '',
+    transcript,
     transcriptSourceNote: typeof video.transcriptSourceNote === 'string' ? video.transcriptSourceNote : '',
     source: video.source,
     organizeTemplate: normalizeTemplate(video.organizeTemplate),
@@ -185,6 +192,26 @@ function normalizeVideo(video) {
   }
 
   return normalized;
+}
+
+function normalizeTranscript(video) {
+  if (typeof video.transcript === 'string') {
+    return video.transcript;
+  }
+
+  if (typeof video.transcriptText === 'string') {
+    return video.transcriptText;
+  }
+
+  if (typeof video.bodyText === 'string') {
+    return video.bodyText;
+  }
+
+  return '';
+}
+
+function hasTranscript(video) {
+  return typeof video.transcript === 'string' && video.transcript.length > 0;
 }
 
 function normalizeLocalVideo(video) {
@@ -425,9 +452,9 @@ function renderVideos() {
     contentUse.classList.toggle('is-strong', video.contentUse !== 'なし');
 
     const transcriptStatus = card.querySelector('.transcript-status');
-    const hasTranscript = Boolean(video.transcript.trim());
-    transcriptStatus.textContent = hasTranscript ? '本文あり' : '本文なし';
-    transcriptStatus.classList.toggle('is-strong', hasTranscript);
+    const hasTranscriptText = hasTranscript(video);
+    transcriptStatus.textContent = hasTranscriptText ? '本文あり' : '本文なし';
+    transcriptStatus.classList.toggle('is-strong', hasTranscriptText);
 
     card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
 
@@ -468,12 +495,14 @@ function renderVideos() {
 function buildAiPrompt(video) {
   const template = organizeTemplates[normalizeTemplate(video.organizeTemplate)];
   const note = video.note || 'メモなし';
-  const transcript = video.transcript.trim();
+  const transcript = typeof video.transcript === 'string' ? video.transcript : '';
   const transcriptSourceNote = video.transcriptSourceNote.trim() || '取得方法メモなし';
-  const transcriptInstructions = transcript
+  const transcriptInstructions = hasTranscript(video)
     ? [
-        '以下の文字起こしをもとに整理してください。',
-        '文字起こし全文：',
+        '以下の文字起こし・本文をもとに整理してください。',
+        'タイトルやサムネイルだけではなく、本文内容を優先して判断してください。',
+        '',
+        '【文字起こし・本文】',
         transcript,
       ]
     : [
@@ -594,7 +623,7 @@ function getFormVideo() {
     videoId: extractYouTubeVideoId(formData.get('url').trim()),
     thumbnailUrl: getYouTubeThumbnailUrl(extractYouTubeVideoId(formData.get('url').trim())),
     note: formData.get('note').trim(),
-    transcript: (formData.get('transcript') || '').trim(),
+    transcript: formData.get('transcript') || '',
     transcriptSourceNote: (formData.get('transcriptSourceNote') || '').trim(),
     organizeTemplate: formData.get('organizeTemplate') || defaultTemplate,
     publishedDate: formData.get('publishedDate') || '',
@@ -633,7 +662,7 @@ function updateLocalVideoTranscript(event, id) {
   state.localVideos = state.localVideos.map((video) => video.id === id
     ? normalizeLocalVideo({
         ...video,
-        transcript: (formData.get('transcript') || '').trim(),
+        transcript: formData.get('transcript') || '',
         transcriptSourceNote: (formData.get('transcriptSourceNote') || '').trim(),
       })
     : video);
