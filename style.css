@@ -447,6 +447,29 @@ button:hover,
   background: rgba(169, 184, 204, 0.12);
 }
 
+.template-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid rgba(79, 209, 197, 0.28);
+  border-radius: 999px;
+  background: rgba(79, 209, 197, 0.08);
+  color: #9ff5ed;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.copy-prompt {
+  align-self: flex-start;
+}
+
+.theme-relation {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
 .source-badge.is-local {
   background: rgba(79, 209, 197, 0.18);
   color: #9ff5ed;

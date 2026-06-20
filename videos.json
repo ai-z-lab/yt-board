@@ -13,7 +13,8 @@
     "fortiesInsight": "体力と責任のバランスが変わる40代には、努力量を増やすより生活設計を軽くする発信につなげやすい。",
     "decision": "A",
     "deepDive": true,
-    "postCandidate": "note"
+    "postCandidate": "note",
+    "organizeTemplate": "fortiesReal"
   },
   {
     "channelName": "キャリア再設計チャンネル",
@@ -29,7 +30,8 @@
     "fortiesInsight": "焦りで副業を始めがちな40代に対して、生活防衛と小さな検証を軸にした投稿へ展開できる。",
     "decision": "B",
     "deepDive": true,
-    "postCandidate": "X"
+    "postCandidate": "X",
+    "organizeTemplate": "sns"
   },
   {
     "channelName": "学び直しラボ",
@@ -45,6 +47,7 @@
     "fortiesInsight": "学び直しを始めたいが時間が少ない層に、情報を増やすより選ぶ基準を持つ重要性を伝えられる。",
     "decision": "C",
     "deepDive": false,
-    "postCandidate": "なし"
+    "postCandidate": "なし",
+    "organizeTemplate": "aiNews"
   }
 ]
