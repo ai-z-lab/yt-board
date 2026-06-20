@@ -163,19 +163,21 @@ function extractYouTubeVideoId(rawUrl) {
 
   try {
     const url = new URL(rawUrl.trim());
-    const hostname = url.hostname.replace(/^www\./, '');
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+    const pathParts = url.pathname.split('/').filter(Boolean);
 
     if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
       if (url.pathname === '/watch') {
         return sanitizeYouTubeVideoId(url.searchParams.get('v'));
       }
 
-      const pathMatch = url.pathname.match(/^\/(shorts|embed)\/([^/?#]+)/);
-      return sanitizeYouTubeVideoId(pathMatch?.[2]);
+      if (['shorts', 'embed'].includes(pathParts[0])) {
+        return sanitizeYouTubeVideoId(pathParts[1]);
+      }
     }
 
     if (hostname === 'youtu.be') {
-      return sanitizeYouTubeVideoId(url.pathname.split('/').filter(Boolean)[0]);
+      return sanitizeYouTubeVideoId(pathParts[0]);
     }
   } catch (error) {
     return '';
@@ -206,6 +208,16 @@ function updateThumbnailPreview(thumbnailUrl) {
   image.src = thumbnailUrl || '';
 }
 
+function getManualInputMessage(title, channelName) {
+  return !title.value.trim() || !channelName.value.trim() ? 'タイトルとチャンネル名は手入力してください' : '';
+}
+
+function setVideoIdSuccessStatus(title, channelName, suffix = '') {
+  const manualInputMessage = getManualInputMessage(title, channelName);
+  const messages = ['動画IDを取得しました', suffix, manualInputMessage].filter(Boolean);
+  setStatus(elements.autoFillStatus, messages.join('。'), 'success');
+}
+
 async function fetchVideoInfo() {
   const { url: urlInput, title, channelName } = getFormControls();
   const rawUrl = urlInput.value.trim();
@@ -219,12 +231,12 @@ async function fetchVideoInfo() {
 
   if (!videoId) {
     updateThumbnailPreview('');
-    setStatus(elements.autoFillStatus, '対応しているYouTube URLを入力してください。', 'error');
+    setStatus(elements.autoFillStatus, '動画IDを取得できませんでした。対応しているYouTube URLか確認してください。', 'error');
     return;
   }
 
   updateThumbnailPreview(getYouTubeThumbnailUrl(videoId));
-  setStatus(elements.autoFillStatus, 'サムネイルを表示しました。タイトル・チャンネル名を取得中です…', '');
+  setVideoIdSuccessStatus(title, channelName);
 
   try {
     const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`;
@@ -244,10 +256,10 @@ async function fetchVideoInfo() {
       channelName.value = data.author_name;
     }
 
-    setStatus(elements.autoFillStatus, '動画ID・サムネイル・取得できた動画情報を反映しました。', 'success');
+    setVideoIdSuccessStatus(title, channelName, '取得できた動画情報を反映しました');
   } catch (error) {
     console.warn(error);
-    setStatus(elements.autoFillStatus, 'タイトル・チャンネル名は自動取得できませんでした。手入力してください', '');
+    setVideoIdSuccessStatus(title, channelName, 'タイトル・チャンネル名の自動取得はできませんでした');
   }
 }
 
