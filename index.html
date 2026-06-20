@@ -75,6 +75,14 @@
           気になった理由・メモ
           <textarea name="note" rows="3" placeholder="あとで見返したい理由、気になった切り口など" required></textarea>
         </label>
+        <label class="full-field">
+          文字起こし・本文
+          <textarea name="transcript" rows="8" placeholder="YouTubeの文字起こし、字幕、本文メモなど（未入力でも保存できます）"></textarea>
+        </label>
+        <label class="full-field">
+          取得方法メモ
+          <input type="text" name="transcriptSourceNote" placeholder="例：YouTube文字起こしをコピー、手入力メモ、概要欄など">
+        </label>
         <div class="full-field detail-toggle-row">
           <button type="button" id="toggleDetails" class="secondary-button" aria-expanded="false" aria-controls="detailFields">詳細を入力する</button>
           <span>要約や視聴判断は、あとから整理できます。</span>
@@ -182,6 +190,21 @@
       <h3 class="title"></h3>
       <a class="url" target="_blank" rel="noopener noreferrer"></a>
       <button type="button" class="copy-prompt secondary-button">AI整理プロンプトをコピー</button>
+      <button type="button" class="edit-video secondary-button" hidden>編集</button>
+      <form class="video-form edit-video-form" hidden>
+        <label class="full-field">
+          文字起こし・本文
+          <textarea name="transcript" rows="8"></textarea>
+        </label>
+        <label class="full-field">
+          取得方法メモ
+          <input type="text" name="transcriptSourceNote">
+        </label>
+        <div class="form-actions full-field">
+          <button type="submit" class="primary-button">更新する</button>
+          <button type="button" class="cancel-edit">キャンセル</button>
+        </div>
+      </form>
       <div class="content-block note-block">
         <h4>気になった理由・メモ</h4>
         <p class="note"></p>
@@ -202,6 +225,10 @@
         <div>
           <dt>投稿化候補</dt>
           <dd class="post-candidate badge"></dd>
+        </div>
+        <div>
+          <dt>文字起こし</dt>
+          <dd class="transcript-status badge"></dd>
         </div>
         <div>
           <dt>テーマとの関係</dt>

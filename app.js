@@ -172,6 +172,8 @@ function normalizeVideo(video) {
     deepDive: normalizeDeepDive(video.deepDive),
     contentUse: ['X', 'note', 'YouTube', 'なし'].includes(video.contentUse ?? video.postCandidate) ? (video.contentUse ?? video.postCandidate) : 'なし',
     note: typeof video.note === 'string' ? video.note : '',
+    transcript: typeof video.transcript === 'string' ? video.transcript : '',
+    transcriptSourceNote: typeof video.transcriptSourceNote === 'string' ? video.transcriptSourceNote : '',
     source: video.source,
     organizeTemplate: normalizeTemplate(video.organizeTemplate),
     videoId: video.videoId || extractYouTubeVideoId(video.url) || '',
@@ -422,10 +424,32 @@ function renderVideos() {
     contentUse.textContent = video.contentUse;
     contentUse.classList.toggle('is-strong', video.contentUse !== 'なし');
 
+    const transcriptStatus = card.querySelector('.transcript-status');
+    const hasTranscript = Boolean(video.transcript.trim());
+    transcriptStatus.textContent = hasTranscript ? '本文あり' : '本文なし';
+    transcriptStatus.classList.toggle('is-strong', hasTranscript);
+
     card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
 
     const copyPromptButton = card.querySelector('.copy-prompt');
     copyPromptButton.addEventListener('click', () => copyPrompt(video, copyPromptButton));
+
+    const editButton = card.querySelector('.edit-video');
+    const editForm = card.querySelector('.edit-video-form');
+    if (video.source === 'local') {
+      editButton.hidden = false;
+      editForm.elements.transcript.value = video.transcript;
+      editForm.elements.transcriptSourceNote.value = video.transcriptSourceNote;
+      editButton.addEventListener('click', () => {
+        editForm.hidden = !editForm.hidden;
+        editButton.textContent = editForm.hidden ? '編集' : '編集を閉じる';
+      });
+      editForm.querySelector('.cancel-edit').addEventListener('click', () => {
+        editForm.hidden = true;
+        editButton.textContent = '編集';
+      });
+      editForm.addEventListener('submit', (event) => updateLocalVideoTranscript(event, video.id));
+    }
 
     card.querySelector('.summary').textContent = video.summary;
     card.querySelector('.insight').textContent = video.insight;
@@ -444,6 +468,18 @@ function renderVideos() {
 function buildAiPrompt(video) {
   const template = organizeTemplates[normalizeTemplate(video.organizeTemplate)];
   const note = video.note || 'メモなし';
+  const transcript = video.transcript.trim();
+  const transcriptSourceNote = video.transcriptSourceNote.trim() || '取得方法メモなし';
+  const transcriptInstructions = transcript
+    ? [
+        '以下の文字起こしをもとに整理してください。',
+        '文字起こし全文：',
+        transcript,
+      ]
+    : [
+        '本文なし。タイトル・概要情報からの仮判定として整理してください。',
+        '注意：動画内容を見た前提で要約しないでください。タイトル、URL、メモから分かる範囲だけで推測と事実を分けてください。',
+      ];
 
   return [
     '以下のYouTube動画を、情報収集用に整理してください。',
@@ -465,6 +501,9 @@ function buildAiPrompt(video) {
     `- URL：${video.url}`,
     `- 気になった理由：${note}`,
     `- 選択テンプレート名：${template.label}`,
+    `- 文字起こし取得方法メモ：${transcriptSourceNote}`,
+    '',
+    ...transcriptInstructions,
     '',
     '出力形式：',
     '',
@@ -555,6 +594,8 @@ function getFormVideo() {
     videoId: extractYouTubeVideoId(formData.get('url').trim()),
     thumbnailUrl: getYouTubeThumbnailUrl(extractYouTubeVideoId(formData.get('url').trim())),
     note: formData.get('note').trim(),
+    transcript: (formData.get('transcript') || '').trim(),
+    transcriptSourceNote: (formData.get('transcriptSourceNote') || '').trim(),
     organizeTemplate: formData.get('organizeTemplate') || defaultTemplate,
     publishedDate: formData.get('publishedDate') || '',
     summary: (formData.get('summary') || '').trim() || '未整理',
@@ -584,6 +625,21 @@ function addLocalVideo(event) {
     const message = error instanceof Error ? error.message : '入力内容を確認してください。';
     setStatus(elements.formStatus, message, 'error');
   }
+}
+
+function updateLocalVideoTranscript(event, id) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  state.localVideos = state.localVideos.map((video) => video.id === id
+    ? normalizeLocalVideo({
+        ...video,
+        transcript: (formData.get('transcript') || '').trim(),
+        transcriptSourceNote: (formData.get('transcriptSourceNote') || '').trim(),
+      })
+    : video);
+  saveLocalVideos();
+  setStatus(elements.importStatus, '文字起こし・本文を更新しました。', 'success');
+  renderVideos();
 }
 
 function deleteLocalVideo(id) {
