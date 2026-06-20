@@ -462,6 +462,9 @@ button:hover,
 
 .copy-prompt {
   align-self: flex-start;
+  min-height: 48px;
+  padding: 12px 16px;
+  font-weight: 800;
 }
 
 .theme-relation {
@@ -505,7 +508,8 @@ button:hover,
   .action-buttons > *,
   .form-actions > *,
   .detail-toggle-row > *,
-  .summary-bar button {
+  .summary-bar button,
+  .copy-prompt {
     width: 100%;
     justify-content: center;
   }
