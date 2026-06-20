@@ -5,6 +5,7 @@
   "description": "YouTube動画を仕分けるための軽量静的Webアプリ",
   "scripts": {
     "fetch-transcript": "node scripts/fetch-transcript.js",
-    "fetch-transcripts": "node scripts/fetch-transcript.js"
+    "fetch-transcripts": "node scripts/fetch-transcript.js",
+    "analyze-with-gemini": "node scripts/analyze-with-gemini.js"
   }
 }

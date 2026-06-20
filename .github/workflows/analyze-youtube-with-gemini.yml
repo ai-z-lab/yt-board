@@ -1,0 +1,52 @@
+name: Analyze YouTube with Gemini
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'YouTube URL or videoId'
+        required: true
+        default: ''
+      note:
+        description: '気になった理由・メモ'
+        required: false
+        default: ''
+      template:
+        description: 'テンプレート名'
+        required: false
+        default: '汎用リサーチ'
+
+permissions:
+  contents: write
+
+jobs:
+  analyze-youtube-with-gemini:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Analyze YouTube URL with Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: >-
+          npm run analyze-with-gemini --
+          --target "${{ github.event.inputs.target }}"
+          --note "${{ github.event.inputs.note }}"
+          --template "${{ github.event.inputs.template }}"
+
+      - name: Commit updated videos
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Analyze YouTube video with Gemini
+          file_pattern: data/videos.json
