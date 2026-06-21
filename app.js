@@ -39,6 +39,7 @@ const watchDecisionLabels = {
 };
 
 const storageKey = 'yt-board:v2:local-videos';
+const geminiWorkerEndpointKey = 'yt-board:v2:gemini-worker-endpoint';
 
 const state = {
   sampleVideos: [],
@@ -93,6 +94,7 @@ const analysisPreferredFields = [
   'status',
   'geminiModel',
   'geminiAnalyzedAt',
+  'templateName',
 ];
 
 async function loadVideos() {
@@ -265,6 +267,7 @@ function normalizeVideo(video) {
     risks: typeof video.risks === 'string' ? video.risks : '',
     recommendedAction: typeof video.recommendedAction === 'string' ? video.recommendedAction : '',
     status: typeof video.status === 'string' ? video.status : '',
+    templateName: typeof video.templateName === 'string' ? video.templateName : '',
     geminiModel: typeof video.geminiModel === 'string' ? video.geminiModel : '',
     geminiAnalyzedAt: typeof video.geminiAnalyzedAt === 'string' ? video.geminiAnalyzedAt : '',
     note: typeof video.note === 'string' ? video.note : '',
@@ -522,7 +525,11 @@ function resetListState() {
 }
 
 function getAllVideos() {
-  return [...state.sampleVideos, ...state.localVideos];
+  const localKeys = new Set(state.localVideos.map((video) => getVideoMergeKey(video)));
+  return [
+    ...state.localVideos,
+    ...state.sampleVideos.filter((video) => !localKeys.has(getVideoMergeKey(video))),
+  ];
 }
 
 function getFilteredVideos() {
@@ -561,6 +568,7 @@ function getTranscriptTrialMessage(video) {
   if (video.transcriptStatus === 'unavailable' && video.transcriptError) messages.push(`前回失敗: ${video.transcriptError}`);
   return messages.join(' / ');
 }
+
 
 function persistTranscriptTrialResult(videoId, result) {
   state.localVideos = state.localVideos.map((video) => video.id === videoId
@@ -617,6 +625,101 @@ async function tryFetchTranscript(video, button, statusElement) {
     statusElement.className = 'status-message error';
   } finally {
     button.disabled = false;
+  }
+}
+
+
+function getGeminiWorkerEndpoint() {
+  const configuredEndpoint = window.YT_BOARD_GEMINI_WORKER_URL || localStorage.getItem(geminiWorkerEndpointKey) || '';
+  if (configuredEndpoint) {
+    return configuredEndpoint;
+  }
+
+  const endpoint = window.prompt('Cloudflare WorkerのURLを入力してください（例: https://yt-board-gemini.example.workers.dev）');
+  if (!endpoint) {
+    return '';
+  }
+
+  const normalizedEndpoint = endpoint.trim().replace(/\/$/, '');
+  localStorage.setItem(geminiWorkerEndpointKey, normalizedEndpoint);
+  return normalizedEndpoint;
+}
+
+function normalizeGeminiAnalysis(data) {
+  const points = Array.isArray(data.points) ? data.points : Array.isArray(data.keyPoints) ? data.keyPoints : [];
+  return {
+    summary: typeof data.summary === 'string' && data.summary.trim() ? data.summary.trim() : '未整理',
+    points: points.map((point) => String(point).trim()).filter(Boolean).slice(0, 6),
+    insight: typeof data.insight === 'string' && data.insight.trim() ? data.insight.trim() : '未整理',
+    watchDecision: ['A', 'B', 'C', 'D'].includes(data.watchDecision) ? data.watchDecision : 'D',
+    deepDive: normalizeDeepDive(data.deepDive),
+    contentUse: ['X', 'note', 'YouTube', 'なし'].includes(data.contentUse) ? data.contentUse : 'なし',
+    risks: typeof data.risks === 'string' ? data.risks : '',
+    recommendedAction: typeof data.recommendedAction === 'string' ? data.recommendedAction : '',
+    status: typeof data.status === 'string' && data.status.trim() ? data.status : '整理済み',
+    templateName: typeof data.templateName === 'string' ? data.templateName : '',
+    geminiModel: typeof data.geminiModel === 'string' ? data.geminiModel : '',
+    geminiAnalyzedAt: typeof data.geminiAnalyzedAt === 'string' ? data.geminiAnalyzedAt : new Date().toISOString(),
+  };
+}
+
+function upsertAnalyzedVideo(video, analysis) {
+  const key = getVideoMergeKey(video);
+  const existingLocal = state.localVideos.find((localVideo) => getVideoMergeKey(localVideo) === key);
+  const baseVideo = existingLocal || video;
+  const analyzedVideo = normalizeLocalVideo({ ...baseVideo, ...analysis, source: 'local' });
+
+  if (existingLocal) {
+    state.localVideos = state.localVideos.map((localVideo) => getVideoMergeKey(localVideo) === key ? analyzedVideo : localVideo);
+  } else {
+    state.localVideos.unshift(analyzedVideo);
+  }
+
+  saveLocalVideos();
+}
+
+async function analyzeWithGemini(video, button, statusElement) {
+  const endpoint = getGeminiWorkerEndpoint();
+  if (!endpoint) {
+    setStatus(statusElement, 'Cloudflare WorkerのURLが未設定のため、解析を中止しました。', 'error');
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = '解析中...';
+  setStatus(statusElement, 'Cloudflare Worker経由でGemini解析を実行しています...', '');
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        youtubeUrl: video.url,
+        note: video.note || '',
+        templateName: getTemplateLabel(video.organizeTemplate),
+        templateKey: normalizeTemplate(video.organizeTemplate),
+        title: video.title,
+        channel: video.channel,
+        transcript: video.transcript || '',
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `Worker request failed: ${response.status}`);
+    }
+
+    const analysis = normalizeGeminiAnalysis(data);
+    upsertAnalyzedVideo(video, analysis);
+    setStatus(elements.importStatus, 'Gemini解析結果をカードへ反映し、localStorageに保存しました。', 'success');
+    renderVideos();
+  } catch (error) {
+    console.error(error);
+    setStatus(statusElement, error.message || 'Gemini解析に失敗しました。', 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
   }
 }
 
@@ -693,6 +796,8 @@ function renderVideos() {
 
     const transcriptTrialButton = card.querySelector('.try-transcript-fetch');
     const transcriptTrialStatus = card.querySelector('.transcript-trial-status');
+    const geminiAnalyzeButton = card.querySelector('.gemini-analyze');
+    geminiAnalyzeButton.addEventListener('click', () => analyzeWithGemini(video, geminiAnalyzeButton, transcriptTrialStatus));
     transcriptTrialStatus.textContent = getTranscriptTrialMessage(video);
     transcriptTrialButton.addEventListener('click', () => tryFetchTranscript(video, transcriptTrialButton, transcriptTrialStatus));
 

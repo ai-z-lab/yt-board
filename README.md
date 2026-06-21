@@ -90,6 +90,41 @@ npm run fetch-transcript
 4. 任意で `target` にYouTube URLまたは `videoId` を入力します。空欄なら `data/videos.json` の対象を処理します。
 5. workflow内で `npm ci` と `npm run fetch-transcript` が実行され、結果が `data/videos.json` にコミットされます。
 
+
+## Cloudflare Worker経由でGemini解析する
+
+通常操作では、GitHub Actionsの手動実行ではなく、yt-boardの各カードにある **Geminiで解析する** ボタンから解析します。ブラウザにはGemini APIキーを置かず、`worker.js` をCloudflare Workerへデプロイして、Worker内でGemini APIを呼び出します。
+
+### Workerの設定手順
+
+1. Cloudflare Workersで新しいWorkerを作成します。
+2. このリポジトリの `worker.js` の内容をWorkerへ反映します。
+3. Workerの環境変数に `GEMINI_API_KEY` を追加し、Gemini APIキーを設定します。
+4. Workerをデプロイし、発行されたURLを控えます。例: `https://yt-board-gemini.example.workers.dev`
+5. yt-boardを開き、任意のカードで **Geminiで解析する** を押します。初回だけCloudflare WorkerのURL入力を求められるため、手順4のURLを入力します。入力したWorker URLはブラウザの `localStorage` に保存されます。
+
+Workerはyt-boardから以下を受け取ります。
+
+- `youtubeUrl`: YouTube URL
+- `note`: 気になった理由・メモ
+- `templateName`: 整理テンプレート名
+- 補助情報として、タイトル、チャンネル名、文字起こし・本文
+
+WorkerはGemini APIの解析結果をJSONで返します。yt-boardは返ってきたJSONをカードへ反映し、解析結果を `localStorage` に保存します。サンプルカードを解析した場合も、ブラウザ内の追加データとして保存され、同じYouTube URLのサンプル表示より優先して表示されます。
+
+### Worker URLを固定したい場合
+
+毎回の初回入力を避けたい場合は、`app.js` より前に以下のような設定スクリプトを読み込む運用にできます。
+
+```html
+<script>
+  window.YT_BOARD_GEMINI_WORKER_URL = 'https://yt-board-gemini.example.workers.dev';
+</script>
+<script src="app.js"></script>
+```
+
+`GEMINI_API_KEY` は必ずCloudflare Worker側の環境変数にだけ保存してください。ブラウザ側のJavaScript、HTML、localStorageには保存しないでください。
+
 ## AI整理プロンプトをコピーする使い方
 
 保存済み・サンプルを含む各動画カードには **AI整理プロンプトをコピー** ボタンがあります。ボタンを押すと、そのカードの動画タイトル、チャンネル名、動画URL、気になった理由・メモ、選択テンプレート名を含むAI用プロンプトがクリップボードにコピーされます。コピーが完了すると、ボタン表示が一時的に **コピーしました** に変わります。
