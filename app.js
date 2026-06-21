@@ -726,12 +726,7 @@ function renderVideos() {
 
     const analysisDetails = card.querySelector('.analysis-details');
     const toggleAnalysisButton = card.querySelector('.toggle-analysis');
-    toggleAnalysisButton.addEventListener('click', () => {
-      const isOpen = analysisDetails.hidden;
-      analysisDetails.hidden = !isOpen;
-      toggleAnalysisButton.setAttribute('aria-expanded', String(isOpen));
-      toggleAnalysisButton.textContent = isOpen ? '詳細を閉じる' : '詳細を見る';
-    });
+    setAnalysisDetailsVisibility(toggleAnalysisButton, analysisDetails, false);
 
     const transcriptDetail = card.querySelector('.transcript-detail');
     const toggleTranscriptDetailButton = card.querySelector('.toggle-transcript-detail');
@@ -754,6 +749,29 @@ function renderVideos() {
 
     elements.videoList.append(card);
   });
+}
+
+
+function setAnalysisDetailsVisibility(button, details, visible) {
+  details.hidden = !visible;
+  button.setAttribute('aria-expanded', String(visible));
+  button.textContent = visible ? '詳細を閉じる' : '詳細を見る';
+}
+
+function toggleAnalysisDetails(button) {
+  const card = button.closest('.video-card');
+
+  if (!card) {
+    return;
+  }
+
+  const details = card.querySelector('.analysis-details');
+
+  if (!details) {
+    return;
+  }
+
+  setAnalysisDetailsVisibility(button, details, details.hidden);
 }
 
 function buildAiPrompt(video) {
@@ -1057,6 +1075,19 @@ function bindEvents() {
   elements.addVideoForm.addEventListener('submit', addLocalVideo);
   elements.exportButton.addEventListener('click', exportLocalVideos);
   elements.importInput.addEventListener('change', importLocalVideos);
+  elements.videoList.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const toggleAnalysisButton = event.target.closest('.toggle-analysis');
+
+    if (!toggleAnalysisButton || !elements.videoList.contains(toggleAnalysisButton)) {
+      return;
+    }
+
+    toggleAnalysisDetails(toggleAnalysisButton);
+  });
 }
 
 bindEvents();
