@@ -631,7 +631,24 @@ async function tryFetchTranscript(video, button, statusElement) {
 
 function getGeminiWorkerEndpoint() {
   const configuredEndpoint = window.YT_BOARD_GEMINI_WORKER_URL || localStorage.getItem(geminiWorkerEndpointKey) || '';
-  return configuredEndpoint.trim().replace(/\/$/, '');
+  return String(configuredEndpoint).trim().replace(/\/$/, '');
+}
+
+function getGeminiStatusElement(card) {
+  if (!card) {
+    return null;
+  }
+
+  const existingStatus = card.querySelector('.gemini-analysis-status');
+  if (existingStatus) {
+    return existingStatus;
+  }
+
+  const statusElement = document.createElement('p');
+  statusElement.className = 'gemini-analysis-status status-message';
+  statusElement.setAttribute('aria-live', 'polite');
+  card.querySelector('.card-actions')?.append(statusElement);
+  return statusElement;
 }
 
 function normalizeGeminiAnalysis(data) {
@@ -834,6 +851,13 @@ function renderVideos() {
     const transcriptTrialStatus = card.querySelector('.transcript-trial-status');
     transcriptTrialStatus.textContent = getTranscriptTrialMessage(video);
     transcriptTrialButton.addEventListener('click', () => tryFetchTranscript(video, transcriptTrialButton, transcriptTrialStatus));
+
+    const geminiAnalyzeButton = card.querySelector('.gemini-analyze');
+    const geminiStatus = getGeminiStatusElement(article);
+    geminiAnalyzeButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      analyzeWithGemini(video, geminiAnalyzeButton, geminiStatus);
+    });
 
     const transcriptButton = card.querySelector('.add-transcript');
     const transcriptPanel = card.querySelector('.transcript-panel');
@@ -1154,6 +1178,10 @@ function importLocalVideos(event) {
 }
 
 function setStatus(element, message, type) {
+  if (!element) {
+    return;
+  }
+
   element.textContent = message;
   element.className = `status-message ${type}`;
 }
@@ -1224,10 +1252,12 @@ function bindEvents() {
     if (geminiAnalyzeButton && elements.videoList.contains(geminiAnalyzeButton)) {
       const card = geminiAnalyzeButton.closest('.video-card');
       const video = card ? findVideoByMergeKey(card.dataset.videoKey) : null;
-      const statusElement = card ? card.querySelector('.transcript-trial-status') : null;
+      const statusElement = getGeminiStatusElement(card);
 
       if (video && statusElement) {
         analyzeWithGemini(video, geminiAnalyzeButton, statusElement);
+      } else {
+        setStatus(statusElement, '解析に失敗しました: 対象の動画カードを特定できませんでした', 'error');
       }
 
       return;
