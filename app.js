@@ -875,18 +875,43 @@ function upsertAnalyzedVideo(video, analysis) {
 async function analyzeWithGemini(video, button, statusElement) {
   const card = button.closest('.video-card');
   const originalText = button.textContent;
+  const client = window.YtBoardGeminiClient;
+
+  if (!client || typeof client.analyzeVideo !== 'function') {
+    updateGeminiStatusDisplay(card, video, {
+      label: 'Gemini解析失敗',
+      failureReason: 'Gemini解析クライアントを読み込めませんでした',
+    });
+    return;
+  }
 
   button.disabled = true;
-  button.textContent = '手動解析モード';
-  showGeminiManualModeGuide(card, video);
+  button.textContent = '解析中...';
+  updateGeminiStatusDisplay(card, video, { label: 'Gemini解析中' });
   if (statusElement) {
     statusElement.classList.remove('error');
   }
 
-  window.setTimeout(() => {
+  try {
+    const analysis = normalizeGeminiAnalysis(await client.analyzeVideo(video, {
+      prompt: buildAiPrompt(video),
+    }));
+
+    upsertAnalyzedVideo(video, analysis);
+    updateCardWithAnalysis(card, analysis);
+    setStatus(elements.importStatus, 'Gemini解析結果をカードとlocalStorageに保存しました。', 'success');
+    renderVideos();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Gemini解析に失敗しました';
+    updateGeminiStatusDisplay(card, video, {
+      label: 'Gemini解析失敗',
+      failureReason: message,
+    });
+    setStatus(elements.importStatus, message, 'error');
+  } finally {
     button.disabled = false;
     button.textContent = originalText;
-  }, 300);
+  }
 }
 
 
@@ -988,11 +1013,7 @@ function renderVideos() {
     transcriptTrialButton.addEventListener('click', () => tryFetchTranscript(video, transcriptTrialButton, transcriptTrialStatus));
 
     const geminiAnalyzeButton = card.querySelector('.gemini-analyze');
-    const geminiStatus = getGeminiStatusElement(article);
-    geminiAnalyzeButton.addEventListener('click', (event) => {
-      event.stopPropagation();
-      analyzeWithGemini(video, geminiAnalyzeButton, geminiStatus);
-    });
+    getGeminiStatusElement(article);
 
     const transcriptButton = card.querySelector('.add-transcript');
     const transcriptPanel = card.querySelector('.transcript-panel');
