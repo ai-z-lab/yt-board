@@ -80,6 +80,10 @@
           <textarea name="transcript" rows="8" placeholder="YouTubeの文字起こし、字幕、本文メモなど（未入力でも保存できます）"></textarea>
         </label>
         <label class="full-field">
+          Gemini回答メモ
+          <textarea name="geminiAnswerMemo" rows="8" placeholder="YouTubeアプリ内の「この動画について質問する」でGeminiが出した要約や回答をそのまま貼り付け（未入力でも保存できます）"></textarea>
+        </label>
+        <label class="full-field">
           取得方法メモ
           <input type="text" name="transcriptSourceNote" placeholder="例：YouTube文字起こしをコピー、手入力メモ、概要欄など">
         </label>
@@ -107,27 +111,29 @@
           <label>
             視聴判断
             <select name="watchDecision">
-              <option value="D" selected>D 保留</option>
-              <option value="A">A 全部見る</option>
-              <option value="B">B 該当箇所だけ見る</option>
-              <option value="C">C 要約で十分</option>
+              <option value="D" selected>後で見る</option>
+              <option value="A">見る</option>
+              <option value="B">該当箇所だけ見る</option>
+              <option value="C">見ない</option>
             </select>
           </label>
           <label>
             深掘り候補
             <select name="deepDive">
               <option value="undecided" selected>未判定</option>
-              <option value="true">あり</option>
+              <option value="true">要追加リサーチ</option>
               <option value="false">なし</option>
             </select>
           </label>
           <label>
             投稿化候補
             <select name="contentUse">
-              <option value="なし" selected>なし</option>
+              <option value="none" selected>なし</option>
               <option value="X">X</option>
               <option value="note">note</option>
-              <option value="YouTube">YouTube</option>
+              <option value="YouTubeShort">YouTubeショート</option>
+              <option value="TikTok">TikTok</option>
+              <option value="pending">保留</option>
             </select>
           </label>
         </div>
@@ -149,10 +155,10 @@
           視聴判断
           <select id="decisionFilter">
             <option value="all">すべて</option>
-            <option value="A">A 全部見る</option>
-            <option value="B">B 該当箇所だけ見る</option>
-            <option value="C">C 要約で十分</option>
-            <option value="D">D 保留</option>
+            <option value="A">見る</option>
+            <option value="B">該当箇所だけ見る</option>
+            <option value="C">見ない</option>
+            <option value="D">後で見る</option>
           </select>
         </label>
         <label class="check-label">
@@ -183,6 +189,7 @@
         <span class="source-badge badge"></span>
         <span class="organize-template template-badge"></span>
         <span class="gemini-analyzed-badge badge" hidden>Gemini解析済み</span>
+        <span class="gemini-answer-badge badge is-strong" hidden>Gemini回答あり</span>
       </div>
       <button type="button" class="delete-video" hidden>削除</button>
       <a class="thumbnail-link" target="_blank" rel="noopener noreferrer" hidden>
@@ -194,11 +201,14 @@
       <div class="card-actions">
         <button type="button" class="try-transcript-fetch secondary-button">文字起こし取得を試す</button>
         <button type="button" class="add-transcript secondary-button">文字起こしを追加</button>
+        <button type="button" class="copy-youtube-gemini-question secondary-button">YouTube上Gemini質問をコピー</button>
         <button type="button" class="copy-prompt secondary-button">AI整理プロンプトをコピー</button>
         <button type="button" class="gemini-analyze primary-button">Geminiで解析する</button>
         <div class="status-split" aria-label="字幕取得とGemini解析の状態">
           <p class="status-row transcript-card-status"><span>字幕</span><strong></strong></p>
           <p class="status-row gemini-card-status"><span>Gemini解析</span><strong></strong></p>
+          <p class="status-row gemini-answer-card-status"><span>Gemini回答</span><strong class="gemini-answer-status"></strong></p>
+          <p class="status-row content-idea-card-status"><span>発信ネタ</span><strong class="content-idea-status"></strong></p>
           <p class="status-row gemini-analysis-status" aria-live="polite"><span>状態</span><strong>未実行</strong></p>
           <p class="status-row gemini-failure-reason" hidden><span>案内</span><strong></strong></p>
         </div>
@@ -230,6 +240,47 @@
           </div>
         </form>
       </section>
+      <section class="gemini-memo-panel" aria-label="Gemini回答メモ">
+        <h4>Gemini回答メモ</h4>
+        <p class="gemini-memo-help">YouTubeアプリ内の「この動画について質問する」で得た回答を貼り付け、見る価値や発信先タグを一緒に保存できます。</p>
+        <form class="video-form gemini-memo-form">
+          <label class="full-field">
+            Gemini回答メモ
+            <textarea name="geminiAnswerMemo" rows="8" placeholder="YouTube上のGemini回答をそのまま貼り付け"></textarea>
+          </label>
+          <label>
+            判定タグ
+            <select name="watchDecision">
+              <option value="A">見る</option>
+              <option value="C">見ない</option>
+              <option value="B">該当箇所だけ見る</option>
+              <option value="D">後で見る</option>
+            </select>
+          </label>
+          <label>
+            追加リサーチ
+            <select name="deepDive">
+              <option value="未判定">未判定</option>
+              <option value="要追加リサーチ">要追加リサーチ</option>
+              <option value="なし">なし</option>
+            </select>
+          </label>
+          <label>
+            向き先タグ
+            <select name="contentUse">
+              <option value="none">なし</option>
+              <option value="X">X</option>
+              <option value="note">note</option>
+              <option value="YouTubeShort">YouTubeショート</option>
+              <option value="TikTok">TikTok</option>
+              <option value="pending">保留</option>
+            </select>
+          </label>
+          <div class="form-actions full-field">
+            <button type="submit" class="primary-button gemini-memo-save">Gemini回答メモを保存</button>
+          </div>
+        </form>
+      </section>
       <div class="content-block note-block">
         <h4>気になった理由・メモ</h4>
         <p class="note"></p>
@@ -256,8 +307,16 @@
           <dd class="transcript-status badge"></dd>
         </div>
         <div>
+          <dt>Gemini回答</dt>
+          <dd class="gemini-answer-status badge"></dd>
+        </div>
+        <div>
           <dt>Gemini解析</dt>
           <dd class="gemini-status badge"></dd>
+        </div>
+        <div>
+          <dt>発信ネタ</dt>
+          <dd class="content-idea-status badge"></dd>
         </div>
         <div>
           <dt>状態</dt>
