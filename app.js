@@ -95,13 +95,15 @@ const analysisPreferredFields = [
   'geminiModel',
   'geminiAnalyzedAt',
   'templateName',
+  'geminiError',
+  'geminiAnalysisSource',
 ];
 
 async function loadVideos() {
   try {
     const [baseVideos, analysisVideos] = await Promise.all([
       fetchVideoJson('./videos.json', { required: true }),
-      fetchVideoJson('./data/videos.json', { required: false }),
+      fetchVideoJson('./data/videos.json', { required: false, analysisSource: true }),
     ]);
 
     const mergedSamples = mergeVideoCollections(baseVideos, analysisVideos);
@@ -114,7 +116,7 @@ async function loadVideos() {
   }
 }
 
-async function fetchVideoJson(path, { required }) {
+async function fetchVideoJson(path, { required, analysisSource = false }) {
   const response = await fetch(path, { cache: 'no-cache' });
 
   if (!response.ok) {
@@ -130,7 +132,7 @@ async function fetchVideoJson(path, { required }) {
     throw new Error(`${path}の形式が不正です: 配列である必要があります。`);
   }
 
-  return data.map((video) => normalizeVideo(video));
+  return data.map((video) => normalizeVideo(analysisSource ? { ...video, geminiAnalysisSource: true } : video));
 }
 
 function getVideoMergeKey(video) {
@@ -270,6 +272,8 @@ function normalizeVideo(video) {
     templateName: typeof video.templateName === 'string' ? video.templateName : '',
     geminiModel: typeof video.geminiModel === 'string' ? video.geminiModel : '',
     geminiAnalyzedAt: typeof video.geminiAnalyzedAt === 'string' ? video.geminiAnalyzedAt : '',
+    geminiError: typeof video.geminiError === 'string' ? video.geminiError : '',
+    geminiAnalysisSource: Boolean(video.geminiAnalysisSource),
     note: typeof video.note === 'string' ? video.note : '',
     transcript,
     transcriptSourceNote: typeof video.transcriptSourceNote === 'string' ? video.transcriptSourceNote : '',
@@ -553,6 +557,56 @@ function getOrganizeStatus(video) {
   return video.status || (hasSummary || hasPoints || hasInsight || hasDecision || hasDeepDive || hasPostCandidate ? '整理済み' : '未整理');
 }
 
+function hasGeminiAnalysis(video) {
+  return Boolean(
+    video.geminiAnalyzedAt
+    || video.geminiModel
+    || video.geminiAnalysisSource
+  );
+}
+
+function getGeminiAnalysisLabel(video) {
+  if (video.geminiError) return 'Gemini解析失敗';
+  return hasGeminiAnalysis(video) ? 'Gemini解析成功' : '未実行';
+}
+
+function updateStatusRow(row, value) {
+  if (!row) return;
+  const target = row.querySelector('strong') || row;
+  target.textContent = value;
+}
+
+function updateGeminiStatusDisplay(card, video, runtime = {}) {
+  if (!card) return;
+
+  const hasTranscriptText = hasTranscript(video);
+  const geminiLabel = runtime.label || getGeminiAnalysisLabel(video);
+  const failureReason = runtime.failureReason || video.geminiError || '';
+  const geminiSucceeded = geminiLabel === 'Gemini解析成功';
+
+  updateStatusRow(card.querySelector('.transcript-card-status'), hasTranscriptText ? '取得済み' : '取得できませんでした');
+  updateStatusRow(card.querySelector('.gemini-card-status'), geminiLabel.replace('Gemini解析', '') || geminiLabel);
+  updateStatusRow(card.querySelector('.gemini-analysis-status'), geminiLabel);
+
+  const reasonRow = card.querySelector('.gemini-failure-reason');
+  if (reasonRow) {
+    reasonRow.hidden = !failureReason;
+    updateStatusRow(reasonRow, failureReason || 'なし');
+  }
+
+  const notice = card.querySelector('.transcript-gemini-notice');
+  if (notice) notice.hidden = hasTranscriptText || !geminiSucceeded;
+
+  const badge = card.querySelector('.gemini-analyzed-badge');
+  if (badge) badge.hidden = !geminiSucceeded;
+
+  const geminiBadge = card.querySelector('.gemini-status');
+  if (geminiBadge) {
+    geminiBadge.textContent = geminiLabel;
+    geminiBadge.classList.toggle('is-strong', geminiSucceeded);
+    geminiBadge.classList.toggle('is-warning', geminiLabel === 'Gemini解析失敗');
+  }
+}
 
 function getTranscriptStatusLabel(video, hasTranscriptText) {
   if (hasTranscriptText) return '本文あり：AI整理可能';
@@ -666,6 +720,7 @@ function normalizeGeminiAnalysis(data) {
     templateName: typeof data.templateName === 'string' ? data.templateName : '',
     geminiModel: typeof data.geminiModel === 'string' ? data.geminiModel : '',
     geminiAnalyzedAt: typeof data.geminiAnalyzedAt === 'string' ? data.geminiAnalyzedAt : new Date().toISOString(),
+    geminiError: '',
   };
 }
 
@@ -696,6 +751,14 @@ function updateCardWithAnalysis(card, analysis) {
   card.querySelector('.insight').textContent = analysis.insight;
   card.querySelector('.risks').textContent = analysis.risks || 'なし';
   card.querySelector('.recommended-action').textContent = analysis.recommendedAction || 'なし';
+  card.querySelector('.watch-decision-detail').textContent = watchDecisionLabels[analysis.watchDecision] ?? analysis.watchDecision;
+  card.querySelector('.deep-dive-detail').textContent = analysis.deepDive;
+  card.querySelector('.content-use-detail').textContent = analysis.contentUse;
+  card.querySelector('.status-detail').textContent = analysis.status || '整理済み';
+
+  const analysisStatus = card.querySelector('.analysis-status');
+  if (analysisStatus) analysisStatus.textContent = analysis.status || '整理済み';
+  updateGeminiStatusDisplay(card, analysis, { label: 'Gemini解析成功' });
 
   const points = card.querySelector('.points');
   points.replaceChildren();
@@ -727,11 +790,11 @@ async function analyzeWithGemini(video, button, statusElement) {
 
   button.disabled = true;
   button.textContent = '解析中...';
-  setStatus(statusElement, 'Geminiで解析中...', '');
+  updateGeminiStatusDisplay(card, video, { label: '解析中' });
 
   const endpoint = getGeminiWorkerEndpoint();
   if (!endpoint) {
-    setStatus(statusElement, 'Gemini解析用のAPI endpointが未設定です', 'error');
+    updateGeminiStatusDisplay(card, video, { label: 'Gemini解析失敗', failureReason: 'Gemini解析用のAPI endpointが未設定です' });
     button.disabled = false;
     button.textContent = originalText;
     return;
@@ -762,12 +825,11 @@ async function analyzeWithGemini(video, button, statusElement) {
     if (card) {
       updateCardWithAnalysis(card, analysis);
     }
-    setStatus(statusElement, '解析完了', 'success');
+    updateGeminiStatusDisplay(card, analysis, { label: 'Gemini解析成功' });
     setStatus(elements.importStatus, 'Gemini解析結果をカードへ反映し、localStorageに保存しました。', 'success');
   } catch (error) {
     console.error(error);
-    const reason = error.message ? `: ${error.message}` : '';
-    setStatus(statusElement, `解析に失敗しました${reason}`, 'error');
+    updateGeminiStatusDisplay(card, video, { label: 'Gemini解析失敗', failureReason: error.message || 'Gemini API解析に失敗しました。' });
   } finally {
     button.disabled = false;
     button.textContent = originalText;
@@ -839,13 +901,15 @@ function renderVideos() {
     transcriptStatus.classList.toggle('is-warning', !hasTranscriptText);
 
     const transcriptNotice = card.querySelector('.transcript-notice');
-    transcriptNotice.hidden = hasTranscriptText;
+    transcriptNotice.hidden = hasTranscriptText || hasGeminiAnalysis(video);
 
     card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
 
     const copyPromptButton = card.querySelector('.copy-prompt');
     copyPromptButton.textContent = hasTranscriptText ? '本文ベース整理プロンプトをコピー' : '仮判定プロンプトをコピー';
     copyPromptButton.addEventListener('click', () => copyPrompt(video, copyPromptButton));
+
+    updateGeminiStatusDisplay(article, video);
 
     const transcriptTrialButton = card.querySelector('.try-transcript-fetch');
     const transcriptTrialStatus = card.querySelector('.transcript-trial-status');
@@ -886,6 +950,11 @@ function renderVideos() {
     card.querySelector('.insight').textContent = video.insight;
     card.querySelector('.risks').textContent = video.risks || 'なし';
     card.querySelector('.recommended-action').textContent = video.recommendedAction || 'なし';
+    card.querySelector('.watch-decision-detail').textContent = watchDecisionLabels[video.watchDecision] ?? video.watchDecision;
+    card.querySelector('.deep-dive-detail').textContent = video.deepDive;
+    card.querySelector('.content-use-detail').textContent = video.contentUse;
+    card.querySelector('.status-detail').textContent = video.status || getOrganizeStatus(video);
+    card.querySelector('.analysis-status').textContent = video.status || getOrganizeStatus(video);
 
     const analysisDetails = card.querySelector('.analysis-details');
     const toggleAnalysisButton = card.querySelector('.toggle-analysis');
