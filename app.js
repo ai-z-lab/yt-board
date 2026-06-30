@@ -32,11 +32,29 @@ const organizeTemplates = {
 const defaultTemplate = 'general';
 
 const watchDecisionLabels = {
-  A: 'A 全部見る',
-  B: 'B 該当箇所だけ見る',
-  C: 'C 要約で十分',
-  D: 'D 保留',
+  A: '見る',
+  B: '該当箇所だけ見る',
+  C: '見ない',
+  D: '後で見る',
 };
+
+const contentUseLabels = {
+  X: 'X',
+  note: 'note',
+  YouTubeShort: 'YouTubeショート',
+  TikTok: 'TikTok',
+  pending: '保留',
+  none: 'なし',
+};
+
+const youtubeGeminiQuestionTemplate = `この動画を、全部見る前の情報収集用に整理してください。
+1. 結論
+2. 重要ポイント3〜5個
+3. 見る価値があるか
+4. 発信ネタになりそうな部分
+5. note、X、ショート動画に使える切り口
+6. 深掘りすべき箇所
+7. 見なくてもよさそうな理由があればそれも教えてください`;
 
 const storageKey = 'yt-board:v2:local-videos';
 const geminiWorkflowFileName = 'analyze-youtube-with-gemini.yml';
@@ -97,6 +115,7 @@ const analysisPreferredFields = [
   'templateName',
   'geminiError',
   'geminiAnalysisSource',
+  'geminiAnswerMemo',
 ];
 
 async function loadVideos() {
@@ -265,7 +284,7 @@ function normalizeVideo(video) {
     insight: video.insight ?? video.fortiesInsight ?? '未整理',
     watchDecision: ['A', 'B', 'C', 'D'].includes(video.watchDecision ?? video.decision) ? (video.watchDecision ?? video.decision) : 'D',
     deepDive: normalizeDeepDive(video.deepDive),
-    contentUse: ['X', 'note', 'YouTube', 'なし'].includes(video.contentUse ?? video.postCandidate) ? (video.contentUse ?? video.postCandidate) : 'なし',
+    contentUse: normalizeContentUse(video.contentUse ?? video.postCandidate),
     risks: typeof video.risks === 'string' ? video.risks : '',
     recommendedAction: typeof video.recommendedAction === 'string' ? video.recommendedAction : '',
     status: typeof video.status === 'string' ? video.status : '',
@@ -274,6 +293,7 @@ function normalizeVideo(video) {
     geminiAnalyzedAt: typeof video.geminiAnalyzedAt === 'string' ? video.geminiAnalyzedAt : '',
     geminiError: typeof video.geminiError === 'string' ? video.geminiError : '',
     geminiAnalysisSource: Boolean(video.geminiAnalysisSource),
+    geminiAnswerMemo: typeof video.geminiAnswerMemo === 'string' ? video.geminiAnswerMemo : '',
     note: typeof video.note === 'string' ? video.note : '',
     transcript,
     transcriptSourceNote: typeof video.transcriptSourceNote === 'string' ? video.transcriptSourceNote : '',
@@ -330,9 +350,26 @@ function normalizeLocalVideo(video) {
 }
 
 function normalizeDeepDive(value) {
-  if (value === true || value === 'あり') return 'あり';
+  if (value === true || value === 'あり' || value === '要追加リサーチ') return '要追加リサーチ';
   if (value === false || value === 'なし') return 'なし';
   return '未判定';
+}
+
+function normalizeContentUse(value) {
+  if (value === 'X') return 'X';
+  if (value === 'note') return 'note';
+  if (value === 'YouTubeShort' || value === 'YouTubeショート' || value === 'YouTube') return 'YouTubeShort';
+  if (value === 'TikTok') return 'TikTok';
+  if (value === 'pending' || value === '保留') return 'pending';
+  return 'none';
+}
+
+function hasGeminiAnswerMemo(video) {
+  return typeof video.geminiAnswerMemo === 'string' && video.geminiAnswerMemo.trim().length > 0;
+}
+
+function hasContentIdea(video) {
+  return normalizeContentUse(video.contentUse) !== 'none';
 }
 
 function extractYouTubeVideoId(rawUrl) {
@@ -539,8 +576,8 @@ function getAllVideos() {
 function getFilteredVideos() {
   return getAllVideos().filter((video) => {
     const matchesDecision = state.watchDecision === 'all' || video.watchDecision === state.watchDecision;
-    const matchesDeepDive = !state.deepDiveOnly || video.deepDive === 'あり';
-    const matchesPostCandidate = !state.contentUseOnly || video.contentUse !== 'なし';
+    const matchesDeepDive = !state.deepDiveOnly || video.deepDive === '要追加リサーチ';
+    const matchesPostCandidate = !state.contentUseOnly || hasContentIdea(video);
 
     return matchesDecision && matchesDeepDive && matchesPostCandidate;
   });
@@ -552,7 +589,7 @@ function getOrganizeStatus(video) {
   const hasInsight = video.insight && video.insight !== '未整理';
   const hasDecision = video.watchDecision && video.watchDecision !== 'D';
   const hasDeepDive = video.deepDive !== '未判定';
-  const hasPostCandidate = video.contentUse && video.contentUse !== 'なし';
+  const hasPostCandidate = hasContentIdea(video);
 
   return video.status || (hasSummary || hasPoints || hasInsight || hasDecision || hasDeepDive || hasPostCandidate ? '整理済み' : '未整理');
 }
@@ -567,7 +604,7 @@ function hasGeminiAnalysis(video) {
 
 function getGeminiAnalysisLabel(video) {
   if (video.geminiError) return 'Gemini解析失敗';
-  return hasGeminiAnalysis(video) ? 'Gemini解析成功' : '未実行';
+  return hasGeminiAnalysis(video) ? 'Gemini解析済み' : 'Gemini解析未実行';
 }
 
 function updateStatusRow(row, value) {
@@ -582,9 +619,9 @@ function updateGeminiStatusDisplay(card, video, runtime = {}) {
   const hasTranscriptText = hasTranscript(video);
   const geminiLabel = runtime.label || getGeminiAnalysisLabel(video);
   const failureReason = runtime.failureReason || video.geminiError || '';
-  const geminiSucceeded = geminiLabel === 'Gemini解析成功';
+  const geminiSucceeded = geminiLabel === 'Gemini解析済み' || geminiLabel === 'Gemini解析成功';
 
-  updateStatusRow(card.querySelector('.transcript-card-status'), hasTranscriptText ? '取得済み' : '取得できませんでした');
+  updateStatusRow(card.querySelector('.transcript-card-status'), hasTranscriptText ? '字幕あり' : '字幕なし');
   updateStatusRow(card.querySelector('.gemini-card-status'), geminiLabel.replace('Gemini解析', '') || geminiLabel);
   updateStatusRow(card.querySelector('.gemini-analysis-status'), geminiLabel);
 
@@ -764,7 +801,7 @@ function normalizeGeminiAnalysis(data) {
     insight: typeof data.insight === 'string' && data.insight.trim() ? data.insight.trim() : '未整理',
     watchDecision: ['A', 'B', 'C', 'D'].includes(data.watchDecision) ? data.watchDecision : 'D',
     deepDive: normalizeDeepDive(data.deepDive),
-    contentUse: ['X', 'note', 'YouTube', 'なし'].includes(data.contentUse) ? data.contentUse : 'なし',
+    contentUse: normalizeContentUse(data.contentUse),
     risks: typeof data.risks === 'string' ? data.risks : '',
     recommendedAction: typeof data.recommendedAction === 'string' ? data.recommendedAction : '',
     status: typeof data.status === 'string' && data.status.trim() ? data.status : '整理済み',
@@ -791,11 +828,11 @@ function updateCardWithAnalysis(card, analysis) {
 
   const deepDive = card.querySelector('.deep-dive');
   deepDive.textContent = analysis.deepDive;
-  deepDive.classList.toggle('is-strong', analysis.deepDive === 'あり');
+  deepDive.classList.toggle('is-strong', analysis.deepDive === '要追加リサーチ');
 
   const contentUse = card.querySelector('.post-candidate');
-  contentUse.textContent = analysis.contentUse;
-  contentUse.classList.toggle('is-strong', analysis.contentUse !== 'なし');
+  contentUse.textContent = contentUseLabels[normalizeContentUse(analysis.contentUse)] || analysis.contentUse;
+  contentUse.classList.toggle('is-strong', hasContentIdea(analysis));
 
   card.querySelector('.summary').textContent = analysis.summary;
   card.querySelector('.summary-full').textContent = analysis.summary;
@@ -804,12 +841,12 @@ function updateCardWithAnalysis(card, analysis) {
   card.querySelector('.recommended-action').textContent = analysis.recommendedAction || 'なし';
   card.querySelector('.watch-decision-detail').textContent = watchDecisionLabels[analysis.watchDecision] ?? analysis.watchDecision;
   card.querySelector('.deep-dive-detail').textContent = analysis.deepDive;
-  card.querySelector('.content-use-detail').textContent = analysis.contentUse;
+  card.querySelector('.content-use-detail').textContent = contentUseLabels[normalizeContentUse(analysis.contentUse)] || analysis.contentUse;
   card.querySelector('.status-detail').textContent = analysis.status || '整理済み';
 
   const analysisStatus = card.querySelector('.analysis-status');
   if (analysisStatus) analysisStatus.textContent = analysis.status || '整理済み';
-  updateGeminiStatusDisplay(card, analysis, { label: 'Gemini解析成功' });
+  updateGeminiStatusDisplay(card, analysis, { label: 'Gemini解析済み' });
 
   const points = card.querySelector('.points');
   points.replaceChildren();
@@ -894,6 +931,20 @@ function renderVideos() {
 
     card.querySelector('.note').textContent = video.note || 'メモなし';
 
+    const geminiAnswerBadge = card.querySelector('.gemini-answer-badge');
+    if (geminiAnswerBadge) geminiAnswerBadge.hidden = !hasGeminiAnswerMemo(video);
+
+    card.querySelectorAll('.gemini-answer-status').forEach((geminiAnswerStatus) => {
+      geminiAnswerStatus.textContent = hasGeminiAnswerMemo(video) ? 'Gemini回答あり' : 'Gemini回答なし';
+      geminiAnswerStatus.classList.toggle('is-strong', hasGeminiAnswerMemo(video));
+      geminiAnswerStatus.classList.toggle('is-warning', !hasGeminiAnswerMemo(video));
+    });
+
+    card.querySelectorAll('.content-idea-status').forEach((contentIdeaStatus) => {
+      contentIdeaStatus.textContent = hasContentIdea(video) ? '発信ネタあり' : '発信ネタなし';
+      contentIdeaStatus.classList.toggle('is-strong', hasContentIdea(video));
+    });
+
     const organizeStatus = card.querySelector('.organize-status');
     const isOrganized = getOrganizeStatus(video) === '整理済み';
     organizeStatus.textContent = isOrganized ? '整理済み' : '未整理';
@@ -905,11 +956,11 @@ function renderVideos() {
 
     const deepDive = card.querySelector('.deep-dive');
     deepDive.textContent = video.deepDive;
-    deepDive.classList.toggle('is-strong', video.deepDive === 'あり');
+    deepDive.classList.toggle('is-strong', video.deepDive === '要追加リサーチ');
 
     const contentUse = card.querySelector('.post-candidate');
-    contentUse.textContent = video.contentUse;
-    contentUse.classList.toggle('is-strong', video.contentUse !== 'なし');
+    contentUse.textContent = contentUseLabels[normalizeContentUse(video.contentUse)] || video.contentUse;
+    contentUse.classList.toggle('is-strong', hasContentIdea(video));
 
     const transcriptStatus = card.querySelector('.transcript-status');
     const hasTranscriptText = hasTranscript(video);
@@ -921,6 +972,9 @@ function renderVideos() {
     transcriptNotice.hidden = hasTranscriptText || hasGeminiAnalysis(video);
 
     card.querySelector('.organize-template').textContent = getTemplateLabel(video.organizeTemplate);
+
+    const copyYouTubeGeminiQuestionButton = card.querySelector('.copy-youtube-gemini-question');
+    copyYouTubeGeminiQuestionButton.addEventListener('click', () => copyTextToClipboard(youtubeGeminiQuestionTemplate, copyYouTubeGeminiQuestionButton));
 
     const copyPromptButton = card.querySelector('.copy-prompt');
     copyPromptButton.textContent = hasTranscriptText ? '本文ベース整理プロンプトをコピー' : '仮判定プロンプトをコピー';
@@ -951,14 +1005,27 @@ function renderVideos() {
     editForm.elements.transcript.value = video.transcript;
     editForm.elements.transcriptSourceNote.value = video.transcriptSourceNote;
 
+    const geminiMemoForm = card.querySelector('.gemini-memo-form');
+    geminiMemoForm.elements.geminiAnswerMemo.value = video.geminiAnswerMemo;
+    geminiMemoForm.elements.watchDecision.value = video.watchDecision;
+    geminiMemoForm.elements.deepDive.value = video.deepDive;
+    geminiMemoForm.elements.contentUse.value = normalizeContentUse(video.contentUse);
+
     if (video.source === 'local') {
       editForm.addEventListener('submit', (event) => updateLocalVideoTranscript(event, video.id));
+      geminiMemoForm.addEventListener('submit', (event) => updateLocalVideoGeminiMemo(event, video.id));
     } else {
       editForm.querySelector('.transcript-save').disabled = true;
       editForm.querySelector('.transcript-save').textContent = 'サンプルは保存不可';
       editForm.addEventListener('submit', (event) => {
         event.preventDefault();
         setStatus(elements.importStatus, 'サンプルデータは画面から更新できません。動画を追加してから文字起こしを保存してください。', 'error');
+      });
+      geminiMemoForm.querySelector('.gemini-memo-save').disabled = true;
+      geminiMemoForm.querySelector('.gemini-memo-save').textContent = 'サンプルは保存不可';
+      geminiMemoForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        setStatus(elements.importStatus, 'サンプルデータは画面から更新できません。動画を追加してからGemini回答メモを保存してください。', 'error');
       });
     }
 
@@ -969,7 +1036,7 @@ function renderVideos() {
     card.querySelector('.recommended-action').textContent = video.recommendedAction || 'なし';
     card.querySelector('.watch-decision-detail').textContent = watchDecisionLabels[video.watchDecision] ?? video.watchDecision;
     card.querySelector('.deep-dive-detail').textContent = video.deepDive;
-    card.querySelector('.content-use-detail').textContent = video.contentUse;
+    card.querySelector('.content-use-detail').textContent = contentUseLabels[normalizeContentUse(video.contentUse)] || video.contentUse;
     card.querySelector('.status-detail').textContent = video.status || getOrganizeStatus(video);
     card.querySelector('.analysis-status').textContent = video.status || getOrganizeStatus(video);
 
@@ -1090,33 +1157,29 @@ function buildAiPrompt(video) {
     '7. 注意点',
     'この動画だけを根拠に発信すると危ない点、未確認情報、偏りを指摘。',
     '',
-    '8. 視聴判断',
-    'A：全部見るべき',
-    'B：該当箇所だけ見ればよい',
-    'C：要約だけで十分',
-    'D：保留',
+    '8. 判定タグ',
+    '見る / 見ない / 該当箇所だけ見る / 後で見る / 発信ネタあり / 要追加リサーチ の観点で整理。',
     '',
     '9. ボードに戻す用まとめ',
     '- 要約：',
     '- 重要ポイント：',
     '- 自分向け示唆：',
-    '- 視聴判断：',
-    '- 深掘り候補：',
-    '- 投稿化候補：',
+    '- 判定タグ：',
+    '- 追加リサーチ：',
+    '- 向き先タグ（X / note / YouTubeショート / TikTok / 保留）：',
     '- 整理状態：',
   ].join('\n');
 }
 
-async function copyPrompt(video, button) {
-  const prompt = buildAiPrompt(video);
+async function copyTextToClipboard(text, button) {
   const originalText = button.textContent;
 
   try {
     if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(prompt);
+      await navigator.clipboard.writeText(text);
     } else {
       const textarea = document.createElement('textarea');
-      textarea.value = prompt;
+      textarea.value = text;
       textarea.setAttribute('readonly', '');
       textarea.style.position = 'fixed';
       textarea.style.opacity = '0';
@@ -1139,6 +1202,9 @@ async function copyPrompt(video, button) {
   }
 }
 
+async function copyPrompt(video, button) {
+  return copyTextToClipboard(buildAiPrompt(video), button);
+}
 function getFormVideo() {
   const formData = new FormData(elements.addVideoForm);
   const points = (formData.get('points') || '')
@@ -1155,6 +1221,7 @@ function getFormVideo() {
     thumbnailUrl: getYouTubeThumbnailUrl(extractYouTubeVideoId(formData.get('url').trim())),
     note: formData.get('note').trim(),
     transcript: formData.get('transcript') || '',
+    geminiAnswerMemo: formData.get('geminiAnswerMemo') || '',
     transcriptSourceNote: (formData.get('transcriptSourceNote') || '').trim(),
     organizeTemplate: formData.get('organizeTemplate') || defaultTemplate,
     publishedDate: formData.get('publishedDate') || '',
@@ -1162,8 +1229,8 @@ function getFormVideo() {
     points: points.length > 0 ? points : ['未整理'],
     insight: (formData.get('insight') || '').trim() || '未整理',
     watchDecision: formData.get('watchDecision') || 'D',
-    deepDive: deepDiveValue === 'undecided' ? '未判定' : deepDiveValue === 'true' ? 'あり' : 'なし',
-    contentUse: formData.get('contentUse') || 'なし',
+    deepDive: deepDiveValue === 'undecided' ? '未判定' : deepDiveValue === 'true' ? '要追加リサーチ' : 'なし',
+    contentUse: normalizeContentUse(formData.get('contentUse') || 'none'),
     transcriptStatus: (formData.get('transcript') || '').trim() ? 'available' : 'unchecked',
   });
 }
@@ -1203,6 +1270,23 @@ function updateLocalVideoTranscript(event, id) {
     : video);
   saveLocalVideos();
   setStatus(elements.importStatus, '文字起こし・本文を更新しました。', 'success');
+  renderVideos();
+}
+
+function updateLocalVideoGeminiMemo(event, id) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  state.localVideos = state.localVideos.map((video) => video.id === id
+    ? normalizeLocalVideo({
+        ...video,
+        geminiAnswerMemo: formData.get('geminiAnswerMemo') || '',
+        watchDecision: formData.get('watchDecision') || 'D',
+        deepDive: formData.get('deepDive') || '未判定',
+        contentUse: normalizeContentUse(formData.get('contentUse') || 'none'),
+      })
+    : video);
+  saveLocalVideos();
+  setStatus(elements.importStatus, 'Gemini回答メモと判定タグを更新しました。', 'success');
   renderVideos();
 }
 
