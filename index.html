@@ -182,6 +182,7 @@
         <span class="published-date"></span>
         <span class="source-badge badge"></span>
         <span class="organize-template template-badge"></span>
+        <span class="gemini-analyzed-badge badge" hidden>Gemini解析済み</span>
       </div>
       <button type="button" class="delete-video" hidden>削除</button>
       <a class="thumbnail-link" target="_blank" rel="noopener noreferrer" hidden>
@@ -195,7 +196,13 @@
         <button type="button" class="add-transcript secondary-button">文字起こしを追加</button>
         <button type="button" class="copy-prompt secondary-button">AI整理プロンプトをコピー</button>
         <button type="button" class="gemini-analyze primary-button">Geminiで解析する</button>
-        <p class="gemini-analysis-status status-message" aria-live="polite"></p>
+        <div class="status-split" aria-label="字幕取得とGemini解析の状態">
+          <p class="status-row transcript-card-status"><span>字幕</span><strong></strong></p>
+          <p class="status-row gemini-card-status"><span>Gemini解析</span><strong></strong></p>
+          <p class="status-row gemini-analysis-status" aria-live="polite"><span>状態</span><strong>未実行</strong></p>
+          <p class="status-row gemini-failure-reason" hidden><span>失敗理由</span><strong></strong></p>
+        </div>
+        <p class="transcript-gemini-notice" hidden>字幕は取得できませんでしたが、Gemini解析は完了しています。</p>
         <p class="transcript-trial-status status-message" aria-live="polite"></p>
       </div>
       <section class="transcript-panel" hidden aria-label="文字起こし取得サポート">
@@ -244,8 +251,16 @@
           <dd class="post-candidate badge"></dd>
         </div>
         <div>
-          <dt>文字起こし</dt>
+          <dt>字幕</dt>
           <dd class="transcript-status badge"></dd>
+        </div>
+        <div>
+          <dt>Gemini解析</dt>
+          <dd class="gemini-status badge"></dd>
+        </div>
+        <div>
+          <dt>状態</dt>
+          <dd class="analysis-status badge"></dd>
         </div>
         <div>
           <dt>テーマとの関係</dt>
@@ -271,8 +286,24 @@
           <p class="insight detail-text"></p>
         </div>
         <div class="content-block">
-          <h4>注意点</h4>
+          <h4>視聴判断</h4>
+          <p class="watch-decision-detail detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>深掘り候補</h4>
+          <p class="deep-dive-detail detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>投稿化候補</h4>
+          <p class="content-use-detail detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>リスク</h4>
           <p class="risks detail-text"></p>
+        </div>
+        <div class="content-block">
+          <h4>状態</h4>
+          <p class="status-detail detail-text"></p>
         </div>
         <div class="content-block">
           <h4>推奨アクション</h4>
