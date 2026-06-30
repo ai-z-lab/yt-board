@@ -39,7 +39,7 @@ const watchDecisionLabels = {
 };
 
 const storageKey = 'yt-board:v2:local-videos';
-const geminiWorkerEndpointKey = 'yt-board:v2:gemini-worker-endpoint';
+const geminiWorkflowFileName = 'analyze-youtube-with-gemini.yml';
 
 const state = {
   sampleVideos: [],
@@ -683,9 +683,60 @@ async function tryFetchTranscript(video, button, statusElement) {
 }
 
 
-function getGeminiWorkerEndpoint() {
-  const configuredEndpoint = window.YT_BOARD_GEMINI_WORKER_URL || localStorage.getItem(geminiWorkerEndpointKey) || '';
-  return String(configuredEndpoint).trim().replace(/\/$/, '');
+function getGitHubRepositoryUrl() {
+  const explicitUrl = window.YT_BOARD_GITHUB_REPOSITORY_URL || '';
+  if (explicitUrl) return String(explicitUrl).replace(/\/$/, '');
+
+  const host = window.location.hostname;
+  const pathSegments = window.location.pathname.split('/').filter(Boolean);
+  if (host.endsWith('.github.io') && pathSegments.length > 0) {
+    const owner = host.replace(/\.github\.io$/, '');
+    return `https://github.com/${owner}/${pathSegments[0]}`;
+  }
+
+  return '';
+}
+
+function getGeminiWorkflowUrl() {
+  const repositoryUrl = getGitHubRepositoryUrl();
+  return repositoryUrl ? `${repositoryUrl}/actions/workflows/${geminiWorkflowFileName}` : '';
+}
+
+function buildGeminiManualModeMessage(video) {
+  const videoId = video.videoId || extractYouTubeVideoId(video.url) || video.url;
+  return [
+    '現在は手動解析モードです。',
+    'GitHub Pages上のブラウザから直接Gemini APIを呼ぶとAPIキーが公開されるため、この画面では即時解析しません。',
+    'GitHub Actionsの「Analyze YouTube with Gemini」を手動実行し、targetにこの動画のURLまたはvideoIdを入力してください。',
+    videoId ? `入力候補: ${videoId}` : '',
+    '実行後、Actionsがdata/videos.jsonへ解析結果をコミットするとカードに反映されます。',
+  ].filter(Boolean).join(' ');
+}
+
+function showGeminiManualModeGuide(card, video) {
+  updateGeminiStatusDisplay(card, video, {
+    label: '現在は手動解析モード',
+    failureReason: 'GitHub Actionsで解析するには、GitHub上の手動実行が必要です',
+  });
+
+  const guide = card?.querySelector('.gemini-manual-mode-guide');
+  if (!guide) return;
+
+  guide.replaceChildren();
+  guide.hidden = false;
+  guide.className = 'gemini-manual-mode-guide status-message';
+  guide.append(document.createTextNode(buildGeminiManualModeMessage(video)));
+
+  const workflowUrl = getGeminiWorkflowUrl();
+  if (workflowUrl) {
+    guide.append(document.createTextNode(' '));
+    const link = document.createElement('a');
+    link.href = workflowUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'GitHub Actionsの手動実行ページを開く';
+    guide.append(link);
+  }
 }
 
 function getGeminiStatusElement(card) {
@@ -789,52 +840,18 @@ async function analyzeWithGemini(video, button, statusElement) {
   const originalText = button.textContent;
 
   button.disabled = true;
-  button.textContent = '解析中...';
-  updateGeminiStatusDisplay(card, video, { label: '解析中' });
-
-  const endpoint = getGeminiWorkerEndpoint();
-  if (!endpoint) {
-    updateGeminiStatusDisplay(card, video, { label: 'Gemini解析失敗', failureReason: 'Gemini解析用のAPI endpointが未設定です' });
-    button.disabled = false;
-    button.textContent = originalText;
-    return;
+  button.textContent = '手動解析モード';
+  showGeminiManualModeGuide(card, video);
+  if (statusElement) {
+    statusElement.classList.remove('error');
   }
 
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        youtubeUrl: video.url,
-        note: video.note || '',
-        templateName: getTemplateLabel(video.organizeTemplate),
-        templateKey: normalizeTemplate(video.organizeTemplate),
-        title: video.title,
-        channel: video.channel,
-        transcript: video.transcript || '',
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || `Worker request failed: ${response.status}`);
-    }
-
-    const analysis = normalizeGeminiAnalysis(data);
-    upsertAnalyzedVideo(video, analysis);
-    if (card) {
-      updateCardWithAnalysis(card, analysis);
-    }
-    updateGeminiStatusDisplay(card, analysis, { label: 'Gemini解析成功' });
-    setStatus(elements.importStatus, 'Gemini解析結果をカードへ反映し、localStorageに保存しました。', 'success');
-  } catch (error) {
-    console.error(error);
-    updateGeminiStatusDisplay(card, video, { label: 'Gemini解析失敗', failureReason: error.message || 'Gemini API解析に失敗しました。' });
-  } finally {
+  window.setTimeout(() => {
     button.disabled = false;
     button.textContent = originalText;
-  }
+  }, 300);
 }
+
 
 function renderVideos() {
   const videos = getFilteredVideos();

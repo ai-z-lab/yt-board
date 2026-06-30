@@ -91,39 +91,15 @@ npm run fetch-transcript
 5. workflow内で `npm ci` と `npm run fetch-transcript` が実行され、結果が `data/videos.json` にコミットされます。
 
 
-## Cloudflare Worker経由でGemini解析する
+## Gemini解析ボタンの現在の挙動
 
-通常操作では、GitHub Actionsの手動実行ではなく、yt-boardの各カードにある **Geminiで解析する** ボタンから解析します。ブラウザにはGemini APIキーを置かず、`worker.js` をCloudflare Workerへデプロイして、Worker内でGemini APIを呼び出します。
+GitHub Pagesは静的サイトのため、ブラウザ上の **Geminiで解析する** ボタンから直接Gemini APIを呼び出す設計にはしていません。ブラウザ側のJavaScript、HTML、localStorageに `GEMINI_API_KEY` を置くと閲覧者へキーが見えてしまうためです。
 
-### Workerの設定手順
+現在の推奨ルートは、GitHub Actionsの **Analyze YouTube with Gemini** workflow を手動実行し、GitHub Secretsに保存した `GEMINI_API_KEY` を使って `scripts/analyze-with-gemini.js` を実行する方式です。解析結果は `data/videos.json` にコミットされ、次回読み込み時にカードへ反映されます。
 
-1. Cloudflare Workersで新しいWorkerを作成します。
-2. このリポジトリの `worker.js` の内容をWorkerへ反映します。
-3. Workerの環境変数に `GEMINI_API_KEY` を追加し、Gemini APIキーを設定します。
-4. Workerをデプロイし、発行されたURLを控えます。例: `https://yt-board-gemini.example.workers.dev`
-5. yt-boardを開き、任意のカードで **Geminiで解析する** を押します。初回だけCloudflare WorkerのURL入力を求められるため、手順4のURLを入力します。入力したWorker URLはブラウザの `localStorage` に保存されます。
+画面上の **Geminiで解析する** ボタンは即時解析を行わず、手動解析モードの案内を表示します。案内には、GitHub Actionsで手動実行が必要な理由、`target` に入力するYouTube URLまたは `videoId`、可能な場合は手動実行ページへのリンクが表示されます。
 
-Workerはyt-boardから以下を受け取ります。
-
-- `youtubeUrl`: YouTube URL
-- `note`: 気になった理由・メモ
-- `templateName`: 整理テンプレート名
-- 補助情報として、タイトル、チャンネル名、文字起こし・本文
-
-WorkerはGemini APIの解析結果をJSONで返します。yt-boardは返ってきたJSONをカードへ反映し、解析結果を `localStorage` に保存します。サンプルカードを解析した場合も、ブラウザ内の追加データとして保存され、同じYouTube URLのサンプル表示より優先して表示されます。
-
-### Worker URLを固定したい場合
-
-毎回の初回入力を避けたい場合は、`app.js` より前に以下のような設定スクリプトを読み込む運用にできます。
-
-```html
-<script>
-  window.YT_BOARD_GEMINI_WORKER_URL = 'https://yt-board-gemini.example.workers.dev';
-</script>
-<script src="app.js"></script>
-```
-
-`GEMINI_API_KEY` は必ずCloudflare Worker側の環境変数にだけ保存してください。ブラウザ側のJavaScript、HTML、localStorageには保存しないでください。
+過去にはCloudflare Workerなどのサーバー側プロキシを使ってブラウザから解析を開始する案もありましたが、現時点の標準運用ではありません。再導入する場合も、APIキーは必ずWorkerやサーバー側の環境変数にだけ保存し、ブラウザへ渡さないでください。
 
 ## AI整理プロンプトをコピーする使い方
 
