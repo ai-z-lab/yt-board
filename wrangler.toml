@@ -1,0 +1,6 @@
+name = "naoki-gemini"
+main = "workers/gemini-analyze-worker.js"
+compatibility_date = "2026-07-02"
+
+[vars]
+ALLOWED_ORIGIN = "https://ai-z-lab.github.io"
